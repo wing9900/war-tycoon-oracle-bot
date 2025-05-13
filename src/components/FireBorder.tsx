@@ -41,66 +41,91 @@ const FireBorder: React.FC<FireBorderProps> = ({ children }) => {
       color: string;
       life: number;
       maxLife: number;
+      side: 'top' | 'right' | 'bottom' | 'left';
       
-      constructor(x: number, y: number) {
+      constructor(x: number, y: number, side: 'top' | 'right' | 'bottom' | 'left') {
         this.x = x;
         this.y = y;
         this.size = Math.random() * 3 + 1;
-        this.speedX = Math.random() * 2 - 1;
-        this.speedY = Math.random() * -2 - 1;
-        this.color = `hsl(${hue}, 100%, ${Math.random() * 20 + 50}%)`;
-        this.maxLife = 50 + Math.random() * 30;
+        this.side = side;
+        
+        // Adjust speed direction based on which side the particle is on
+        switch(side) {
+          case 'top':
+            this.speedX = Math.random() * 2 - 1; // -1 to 1
+            this.speedY = Math.random() * 2; // 0 to 2 (downward)
+            break;
+          case 'right':
+            this.speedX = -Math.random() * 2; // -2 to 0 (leftward)
+            this.speedY = Math.random() * 2 - 1; // -1 to 1
+            break;
+          case 'bottom':
+            this.speedX = Math.random() * 2 - 1; // -1 to 1
+            this.speedY = -Math.random() * 2; // -2 to 0 (upward)
+            break;
+          case 'left':
+            this.speedX = Math.random() * 2; // 0 to 2 (rightward)
+            this.speedY = Math.random() * 2 - 1; // -1 to 1
+            break;
+        }
+        
+        this.color = `hsl(${Math.random() * 30 + 5}, 100%, ${Math.random() * 20 + 50}%)`;
+        this.maxLife = 40 + Math.random() * 20;
         this.life = this.maxLife;
       }
       
       update() {
         this.x += this.speedX;
         this.y += this.speedY;
-        if (this.size > 0.2) this.size -= 0.05;
+        if (this.size > 0.2) this.size -= 0.1;
         this.life--;
       }
       
       draw() {
         if (!ctx) return;
-        ctx.fillStyle = this.color;
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-        ctx.fill();
         
         // Add glow effect
         ctx.shadowBlur = 10;
         ctx.shadowColor = this.color;
+        
+        // Draw fire particle
+        const opacity = (this.life / this.maxLife) * 0.7; // Fade out as life decreases
+        ctx.fillStyle = this.color.replace(')', `, ${opacity})`).replace('hsl', 'hsla');
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
       }
     }
     
     const createParticles = () => {
-      const density = 2;
+      const density = 1.5; // Lower value = more particles
+      const edgeOffset = 3; // How far from the edge to start particles
       
-      // Top border
+      // Top edge
       for (let i = 0; i < canvas.width / density; i++) {
-        if (Math.random() > 0.6) {
-          particles.push(new Particle(i * density, 0));
+        if (Math.random() > 0.85) {
+          particles.push(new Particle(i * density, edgeOffset, 'top'));
         }
       }
       
-      // Bottom border
+      // Right edge
+      for (let i = 0; i < canvas.height / density; i++) {
+        if (Math.random() > 0.85) {
+          particles.push(new Particle(canvas.width - edgeOffset, i * density, 'right'));
+        }
+      }
+      
+      // Bottom edge
       for (let i = 0; i < canvas.width / density; i++) {
-        if (Math.random() > 0.6) {
-          particles.push(new Particle(i * density, canvas.height));
+        if (Math.random() > 0.85) {
+          particles.push(new Particle(i * density, canvas.height - edgeOffset, 'bottom'));
         }
       }
       
-      // Left border
+      // Left edge
       for (let i = 0; i < canvas.height / density; i++) {
-        if (Math.random() > 0.6) {
-          particles.push(new Particle(0, i * density));
-        }
-      }
-      
-      // Right border
-      for (let i = 0; i < canvas.height / density; i++) {
-        if (Math.random() > 0.6) {
-          particles.push(new Particle(canvas.width, i * density));
+        if (Math.random() > 0.85) {
+          particles.push(new Particle(edgeOffset, i * density, 'left'));
         }
       }
     };
@@ -117,7 +142,7 @@ const FireBorder: React.FC<FireBorderProps> = ({ children }) => {
         particles[i].draw();
         
         // Remove dead particles
-        if (particles[i].life <= 0) {
+        if (particles[i].life <= 0 || particles[i].size <= 0.2) {
           particles.splice(i, 1);
           i--;
         }

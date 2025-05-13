@@ -1,21 +1,29 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
-import { ArrowRight } from 'lucide-react';
+import { ArrowUp } from 'lucide-react';
 import FireBorder from '@/components/FireBorder';
 import { askQuestion } from '@/lib/ai';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 const Index = () => {
   const [question, setQuestion] = useState('');
-  const [answer, setAnswer] = useState('');
+  const [messages, setMessages] = useState<Array<{type: 'user' | 'ai', content: string}>>([]);
   const [loading, setLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (inputRef.current) {
       inputRef.current.focus();
     }
   }, []);
+
+  useEffect(() => {
+    if (scrollAreaRef.current) {
+      scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
+    }
+  }, [messages]);
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) {
@@ -28,10 +36,13 @@ const Index = () => {
 
     try {
       setLoading(true);
-      setAnswer('');
+      // Add user message
+      setMessages(prev => [...prev, {type: 'user', content: question}]);
       
       const response = await askQuestion(question);
-      setAnswer(response);
+      
+      // Add AI response
+      setMessages(prev => [...prev, {type: 'ai', content: response}]);
       setQuestion('');
     } catch (error) {
       console.error('Error getting answer:', error);
@@ -48,19 +59,31 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-black flex flex-col items-center pt-16 px-4">
-      <h1 className="text-5xl md:text-6xl font-bold text-transparent bg-clip-text bg-gradient-to-b from-orange-500 to-red-700 mb-16 text-center tracking-wider">
-        WAR TYCOON
-        <span className="block text-4xl md:text-5xl mt-2">AGENT</span>
+    <div className="min-h-screen bg-black flex flex-col">
+      <h1 className="text-5xl md:text-6xl font-bold text-transparent bg-clip-text bg-gradient-to-b from-orange-500 to-red-700 py-8 text-center tracking-wider whitespace-nowrap">
+        WAR TYCOON AI AGENT
       </h1>
 
-      <div className="w-full max-w-3xl mt-auto mb-auto">
-        {answer && (
-          <div className="mb-8 p-6 rounded-lg bg-gradient-to-b from-gray-900 to-black border border-orange-900/40 text-orange-100">
-            {answer}
+      <div className="flex-grow overflow-hidden px-4 mb-4">
+        <ScrollArea className="h-full max-h-[calc(100vh-220px)] pb-4">
+          <div ref={scrollAreaRef} className="pr-4">
+            {messages.map((msg, index) => (
+              <div 
+                key={index} 
+                className={`mb-4 p-4 rounded-lg ${
+                  msg.type === 'user' 
+                    ? 'bg-gradient-to-r from-orange-900/30 to-red-900/30 text-orange-200 ml-12' 
+                    : 'bg-gradient-to-b from-gray-900 to-black border border-orange-900/40 text-orange-100'
+                }`}
+              >
+                {msg.content}
+              </div>
+            ))}
           </div>
-        )}
-        
+        </ScrollArea>
+      </div>
+
+      <div className="w-full px-4 pb-6">
         <form onSubmit={handleSubmit} className="relative w-full">
           <FireBorder>
             <div className="flex items-center w-full rounded-lg bg-black/80 border border-orange-900/40">
@@ -79,14 +102,12 @@ const Index = () => {
                 disabled={loading}
                 className="flex items-center justify-center h-12 w-12 mr-2 rounded-lg bg-gradient-to-b from-orange-600 to-red-700 text-white hover:from-orange-500 hover:to-red-600 transition-all duration-300 disabled:opacity-50"
               >
-                <ArrowRight className="h-5 w-5" />
+                <ArrowUp className="h-5 w-5" />
               </button>
             </div>
           </FireBorder>
         </form>
       </div>
-
-      <div className="h-32"></div>
     </div>
   );
 };
