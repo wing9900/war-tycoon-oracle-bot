@@ -11,7 +11,7 @@ const Index = () => {
   const [messages, setMessages] = useState<Array<{type: 'user' | 'ai', content: string}>>([]);
   const [loading, setLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (inputRef.current) {
@@ -19,10 +19,9 @@ const Index = () => {
     }
   }, []);
 
+  // Scroll to bottom when messages update
   useEffect(() => {
-    if (scrollAreaRef.current) {
-      scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
-    }
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   const handleSubmit = async (e?: React.FormEvent) => {
@@ -65,8 +64,8 @@ const Index = () => {
       </h1>
 
       <div className="flex-grow overflow-hidden px-4 mb-4">
-        <ScrollArea className="h-full max-h-[calc(100vh-220px)] pb-4">
-          <div ref={scrollAreaRef} className="pr-4">
+        <ScrollArea className="h-full max-h-[calc(100vh-220px)]">
+          <div className="pr-4 pb-4">
             {messages.map((msg, index) => (
               <div 
                 key={index} 
@@ -79,6 +78,7 @@ const Index = () => {
                 {msg.content}
               </div>
             ))}
+            <div ref={messagesEndRef} />
           </div>
         </ScrollArea>
       </div>
