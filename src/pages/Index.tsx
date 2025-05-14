@@ -58,13 +58,14 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-black flex flex-col">
+    <div className="flex flex-col h-screen bg-black overflow-hidden">
       <h1 className="text-5xl md:text-6xl font-bold text-transparent bg-clip-text bg-gradient-to-b from-orange-500 to-red-700 py-8 text-center tracking-wider whitespace-nowrap">
         WAR TYCOON AI AGENT
       </h1>
 
-      <div className="flex-grow overflow-hidden px-4 mb-4">
-        <ScrollArea className="h-full max-h-[calc(100vh-220px)]">
+      {/* Messages container with fixed height and scrolling */}
+      <div className="flex-grow overflow-hidden relative px-4">
+        <ScrollArea className="h-full pb-4">
           <div className="space-y-4 pr-4 pb-4">
             {messages.length === 0 && (
               <div className="text-orange-400/70 text-center p-8">
@@ -88,7 +89,8 @@ const Index = () => {
         </ScrollArea>
       </div>
 
-      <div className="w-full px-4 pb-6">
+      {/* Fixed input area at bottom */}
+      <div className="w-full px-4 py-6 bg-black">
         <form onSubmit={handleSubmit} className="relative w-full">
           <FireBorder>
             <div className="flex items-center w-full rounded-lg bg-black border border-orange-900/40">
