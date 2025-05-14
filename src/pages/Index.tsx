@@ -65,7 +65,12 @@ const Index = () => {
 
       <div className="flex-grow overflow-hidden px-4 mb-4">
         <ScrollArea className="h-full max-h-[calc(100vh-220px)]">
-          <div className="pr-4 pb-4">
+          <div className="space-y-4 pr-4 pb-4">
+            {messages.length === 0 && (
+              <div className="text-orange-400/70 text-center p-8">
+                Ask a question about War Tycoon to get started
+              </div>
+            )}
             {messages.map((msg, index) => (
               <div 
                 key={index} 
