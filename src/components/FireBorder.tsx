@@ -98,8 +98,8 @@ const FireBorder: React.FC<FireBorderProps> = ({ children }) => {
     }
     
     const createParticles = () => {
-      const density = 1.5; // Lower value = more particles
-      const edgeOffset = 3; // How far from the edge to start particles
+      const density = 2; // Lower value = more particles
+      const edgeOffset = 2; // How far from the edge to start particles (smaller value means closer to edge)
       
       // Top edge
       for (let i = 0; i < canvas.width / density; i++) {
@@ -166,9 +166,9 @@ const FireBorder: React.FC<FireBorderProps> = ({ children }) => {
     <div className="relative" ref={containerRef}>
       <canvas 
         ref={canvasRef} 
-        className="absolute top-0 left-0 w-full h-full pointer-events-none"
+        className="absolute top-0 left-0 w-full h-full pointer-events-none z-0"
       />
-      <div className="relative z-10">
+      <div className="relative z-10 p-[2px]">
         {children}
       </div>
     </div>

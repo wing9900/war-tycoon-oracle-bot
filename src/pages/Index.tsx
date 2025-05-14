@@ -86,7 +86,7 @@ const Index = () => {
       <div className="w-full px-4 pb-6">
         <form onSubmit={handleSubmit} className="relative w-full">
           <FireBorder>
-            <div className="flex items-center w-full rounded-lg bg-black/80 border border-orange-900/40">
+            <div className="flex items-center w-full rounded-lg bg-black border border-orange-900/40">
               <input
                 ref={inputRef}
                 type="text"
