@@ -1,15 +1,22 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { OpenAI } from 'openai';
 import { Pinecone } from '@pinecone-database/pinecone';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
 const pinecone = new Pinecone({
   apiKey: process.env.PINECONE_API_KEY!,
-  environment: process.env.PINECONE_ENVIRONMENT!,
 });
-const pineconeIndex = pinecone.Index(process.env.PINECONE_INDEX!);
+const pineconeIndex = pinecone.index(process.env.PINECONE_INDEX!, process.env.PINECONE_ENVIRONMENT!);
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req: any, res: any) {
+
+  res.setHeader('Access-Control-Allow-Origin', 'https://wartycoonai.com');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
