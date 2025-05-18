@@ -1,7 +1,7 @@
 {
     "compilerOptions": {
       "target": "ES2022", // Or a similar modern target
-      "module": "ESNext",
+      "module": "NodeNext",
       "moduleResolution": "NodeNext", // Or "Node16"
       "esModuleInterop": true,
       "outDir": "./dist", // Optional: Specify an output directory within 'api'
