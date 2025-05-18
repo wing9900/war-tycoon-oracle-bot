@@ -5,7 +5,10 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
 const pinecone = new Pinecone({
   apiKey: process.env.PINECONE_API_KEY!,
 });
-const pineconeIndex = pinecone.index(process.env.PINECONE_INDEX!, process.env.PINECONE_ENVIRONMENT!);
+
+// MODIFIED LINE: Ensure PINECONE_INDEX_HOST is set in your Vercel environment
+// to the full host URL of your Pinecone index.
+const pineconeIndex = pinecone.index(process.env.PINECONE_INDEX_HOST!);
 
 export default async function handler(req: any, res: any) {
 
@@ -70,6 +73,10 @@ Answer:
     res.status(200).json({ answer });
   } catch (error: any) {
     console.error('Error in /api/chat:', error);
+    // ADDED: More detailed logging for the cause of the error if it exists
+    if (error.cause) {
+      console.error('Caused by:', error.cause);
+    }
     res.status(500).json({ error: 'An error occurred while processing your request.' });
   }
 }
