@@ -4,20 +4,20 @@ import { Pinecone } from '@pinecone-database/pinecone';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const PINECONE_API_KEY = process.env.PINECONE_API_KEY;
 const PINECONE_INDEX_NAME = process.env.PINECONE_INDEX_NAME; // NEW: e.g., "war-tycoon-wiki-index"
-const PINECONE_CLOUD_ENVIRONMENT = process.env.PINECONE_CLOUD_ENVIRONMENT; // NEW: e.g., "aped-4627-b74a" or the full "aws-us-east-1" style if that's what your Pinecone env is
+const PINECONE_ENVIRONMENT = process.env.PINECONE_ENVIRONMENT; // NEW: e.g., "aped-4627-b74a" or the full "aws-us-east-1" style if that's what your Pinecone env is
 
 // --- START DIAGNOSTIC LOGGING ---
 console.log('--- PINEONE DIAGNOSTICS ---');
 console.log('Value of process.env.OPENAI_API_KEY (is set):', !!OPENAI_API_KEY);
 console.log('Value of process.env.PINECONE_API_KEY (is set):', !!PINECONE_API_KEY);
 console.log('Value of process.env.PINECONE_INDEX_NAME:', PINECONE_INDEX_NAME);
-console.log('Value of process.env.PINECONE_CLOUD_ENVIRONMENT:', PINECONE_CLOUD_ENVIRONMENT);
+console.log('Value of process.env.PINECONE_ENVIRONMENT:', PINECONE_ENVIRONMENT);
 console.log('--- END PINEONE DIAGNOSTICS ---');
 
 if (!OPENAI_API_KEY) console.error('CRITICAL ERROR: OPENAI_API_KEY is not set.');
 if (!PINECONE_API_KEY) console.error('CRITICAL ERROR: PINECONE_API_KEY is not set.');
 if (!PINECONE_INDEX_NAME) console.error('CRITICAL ERROR: PINECONE_INDEX_NAME is not set.');
-if (!PINECONE_CLOUD_ENVIRONMENT) console.error('CRITICAL ERROR: PINECONE_CLOUD_ENVIRONMENT is not set.');
+if (!PINECONE_ENVIRONMENT) console.error('CRITICAL ERROR: PINECONE_ENVIRONMENT is not set.');
 // --- END CHECKS ---
 
 const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
@@ -29,7 +29,7 @@ const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 // You need to find the *full Pinecone environment string* from your Pinecone console for your index.
 const pinecone = new Pinecone({
   apiKey: PINECONE_API_KEY!,
-  environment: PINECONE_CLOUD_ENVIRONMENT!, // This needs to be the correct Pinecone environment string
+  environment: PINECONE_ENVIRONMENT!, // This needs to be the correct Pinecone environment string
 });
 
 const pineconeIndex = pinecone.index(PINECONE_INDEX_NAME!);
