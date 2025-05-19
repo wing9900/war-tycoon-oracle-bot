@@ -3,20 +3,20 @@ import { Pinecone } from '@pinecone-database/pinecone';
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const PINECONE_API_KEY = process.env.PINECONE_API_KEY;
-const PINECONE_INDEX_NAME = process.env.PINECONE_INDEX_NAME; // NEW: e.g., "war-tycoon-wiki-index"
+const PINECONE_INDEX = process.env.PINECONE_INDEX; // NEW: e.g., "war-tycoon-wiki-index"
 const PINECONE_ENVIRONMENT = process.env.PINECONE_ENVIRONMENT; // NEW: e.g., "aped-4627-b74a" or the full "aws-us-east-1" style if that's what your Pinecone env is
 
 // --- START DIAGNOSTIC LOGGING ---
 console.log('--- PINEONE DIAGNOSTICS ---');
 console.log('Value of process.env.OPENAI_API_KEY (is set):', !!OPENAI_API_KEY);
 console.log('Value of process.env.PINECONE_API_KEY (is set):', !!PINECONE_API_KEY);
-console.log('Value of process.env.PINECONE_INDEX_NAME:', PINECONE_INDEX_NAME);
+console.log('Value of process.env.PINECONE_INDEX:', PINECONE_INDEX);
 console.log('Value of process.env.PINECONE_ENVIRONMENT:', PINECONE_ENVIRONMENT);
 console.log('--- END PINEONE DIAGNOSTICS ---');
 
 if (!OPENAI_API_KEY) console.error('CRITICAL ERROR: OPENAI_API_KEY is not set.');
 if (!PINECONE_API_KEY) console.error('CRITICAL ERROR: PINECONE_API_KEY is not set.');
-if (!PINECONE_INDEX_NAME) console.error('CRITICAL ERROR: PINECONE_INDEX_NAME is not set.');
+if (!PINECONE_INDEX) console.error('CRITICAL ERROR: PINECONE_INDEX is not set.');
 if (!PINECONE_ENVIRONMENT) console.error('CRITICAL ERROR: PINECONE_ENVIRONMENT is not set.');
 // --- END CHECKS ---
 
@@ -32,7 +32,7 @@ const pinecone = new Pinecone({
   environment: PINECONE_ENVIRONMENT!, // This needs to be the correct Pinecone environment string
 });
 
-const pineconeIndex = pinecone.index(PINECONE_INDEX_NAME!);
+const pineconeIndex = pinecone.index(PINECONE_INDEX!);
 
 export default async function handler(req: any, res: any) {
   // ... (CORS headers and method checks) ...
