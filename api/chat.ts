@@ -1,18 +1,17 @@
 import { OpenAI } from 'openai';
 import { Pinecone } from '@pinecone-database/pinecone';
 
-// Read environment variables that are DEFINED in your Vercel settings
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const PINECONE_API_KEY = process.env.PINECONE_API_KEY;
-const PINECONE_INDEX_FROM_ENV = process.env.PINECONE_INDEX; // Matches Vercel name
-const PINECONE_ENVIRONMENT_FROM_ENV = process.env.PINECONE_ENVIRONMENT; // Matches Vercel name
+const PINECONE_INDEX_FROM_ENV = process.env.PINECONE_INDEX;
+const PINECONE_ENVIRONMENT_FROM_ENV = process.env.PINECONE_ENVIRONMENT; // We'll log it, but not use it in Pinecone constructor
 
 // --- START DIAGNOSTIC LOGGING ---
 console.log('--- PINEONE DIAGNOSTICS (Code expects PINECONE_INDEX & PINECONE_ENVIRONMENT) ---');
 console.log('Value of process.env.OPENAI_API_KEY (is set):', !!OPENAI_API_KEY);
 console.log('Value of process.env.PINECONE_API_KEY (is set):', !!PINECONE_API_KEY);
 console.log('Value of process.env.PINECONE_INDEX:', PINECONE_INDEX_FROM_ENV);
-console.log('Value of process.env.PINECONE_ENVIRONMENT:', PINECONE_ENVIRONMENT_FROM_ENV);
+console.log('Value of process.env.PINECONE_ENVIRONMENT:', PINECONE_ENVIRONMENT_FROM_ENV); // Log for reference
 console.log('--- END PINEONE DIAGNOSTICS ---');
 
 // --- VALIDATION CHECKS ---
@@ -28,25 +27,28 @@ if (!PINECONE_INDEX_FROM_ENV) {
   console.error('CRITICAL ERROR: PINECONE_INDEX (read as PINECONE_INDEX_FROM_ENV) is not set.');
   throw new Error('CRITICAL: PINECONE_INDEX (read as PINECONE_INDEX_FROM_ENV) is not set.');
 }
+// We are not using PINECONE_ENVIRONMENT_FROM_ENV directly in Pinecone constructor anymore,
+// but it's good to know it's set.
 if (!PINECONE_ENVIRONMENT_FROM_ENV) {
-  console.error('CRITICAL ERROR: PINECONE_ENVIRONMENT (read as PINECONE_ENVIRONMENT_FROM_ENV) is not set.');
-  throw new Error('CRITICAL: PINECONE_ENVIRONMENT (read as PINECONE_ENVIRONMENT_FROM_ENV) is not set.');
+  console.error('CRITICAL ERROR: PINECONE_ENVIRONMENT (read as PINECONE_ENVIRONMENT_FROM_ENV) is not set, though not directly used in constructor now.');
+  // Not throwing an error for this one now as we are trying to omit it from constructor
 }
 // --- END CHECKS ---
 
 const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 
-// Initialize Pinecone client
-// CRITICAL: The value of PINECONE_ENVIRONMENT_FROM_ENV needs to be corrected in Vercel
-// from "us-east-1" to your actual Pinecone index environment (e.g., "aped-4627-b74a")
+// MODIFIED PINEONE INITIALIZATION:
+// For serverless indexes with recent client versions, often only the API key is needed.
+// The client uses the API key to determine the project and can then find the serverless index by name.
 const pinecone = new Pinecone({
   apiKey: PINECONE_API_KEY!,
-  environment: PINECONE_ENVIRONMENT_FROM_ENV!, // This will use the value "us-east-1" initially
+  // REMOVED: environment: PINECONE_ENVIRONMENT_FROM_ENV!,
 });
 
 const pineconeIndex = pinecone.index(PINECONE_INDEX_FROM_ENV!);
 
 export default async function handler(req: any, res: any) {
+  // ... (Rest of your handler code remains the same) ...
 
   res.setHeader('Access-Control-Allow-Origin', 'https://wartycoonai.com');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
