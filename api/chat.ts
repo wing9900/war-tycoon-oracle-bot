@@ -6,9 +6,28 @@ const pinecone = new Pinecone({
   apiKey: process.env.PINECONE_API_KEY!,
 });
 
-// MODIFIED LINE: Ensure PINECONE_INDEX_HOST is set in your Vercel environment
-// to the full host URL of your Pinecone index.
-const pineconeIndex = pinecone.index(process.env.PINECONE_INDEX_HOST!);
+// --- START DIAGNOSTIC LOGGING ---
+console.log('--- PINEONE DIAGNOSTICS ---');
+console.log('Value of process.env.PINECONE_INDEX_HOST:', process.env.PINECONE_INDEX_HOST);
+console.log('Type of process.env.PINECONE_INDEX_HOST:', typeof process.env.PINECONE_INDEX_HOST);
+console.log('Is PINECONE_API_KEY set?', !!process.env.PINECONE_API_KEY);
+// You could also log other potentially conflicting old environment variables if you had them:
+// console.log('Value of process.env.PINECONE_ENVIRONMENT (old var):', process.env.PINECONE_ENVIRONMENT);
+// console.log('Value of process.env.PINECONE_INDEX (old var):', process.env.PINECONE_INDEX);
+console.log('--- END PINEONE DIAGNOSTICS ---');
+
+const pineconeIndexHost = process.env.PINECONE_INDEX_HOST;
+
+if (!pineconeIndexHost || typeof pineconeIndexHost !== 'string' || pineconeIndexHost.trim() === '') {
+  console.error('CRITICAL ERROR: PINECONE_INDEX_HOST is not set, is not a string, or is empty in the Vercel environment.');
+  // If the host is missing or invalid, subsequent Pinecone operations will fail.
+  // You might throw an error here to stop execution if preferred:
+  // throw new Error('CRITICAL: PINECONE_INDEX_HOST environment variable is missing or invalid.');
+}
+
+// The original line, now using the logged and checked variable.
+// If pineconeIndexHost is invalid, this line will likely be where Pinecone tries to use it.
+const pineconeIndex = pinecone.index(pineconeIndexHost!);
 
 export default async function handler(req: any, res: any) {
 
@@ -73,9 +92,12 @@ Answer:
     res.status(200).json({ answer });
   } catch (error: any) {
     console.error('Error in /api/chat:', error);
-    // ADDED: More detailed logging for the cause of the error if it exists
     if (error.cause) {
       console.error('Caused by:', error.cause);
+      // ADDED: Log the specific hostname from the error if available
+      if (error.cause.hostname) {
+        console.error('Error details - hostname attempted:', error.cause.hostname);
+      }
     }
     res.status(500).json({ error: 'An error occurred while processing your request.' });
   }
