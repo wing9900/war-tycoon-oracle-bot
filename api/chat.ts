@@ -108,7 +108,9 @@ export default async function handler(req: any, res: any) {
     }
 
     const prompt = `
-You are an expert on the Roblox game War Tycoon. Use the following context to answer the user's question as accurately as possible. If the context is empty or doesn't provide an answer, say you don't have specific information on that from the provided game data.
+You are an expert on the Roblox game War Tycoon. Use the following context to answer the user's question.
+If the context provides relevant information, use it to answer as accurately as possible.
+If the context is empty or does not directly answer the question, state that you can't fully answer the question currently.
 
 Context:
 ${contexts}
