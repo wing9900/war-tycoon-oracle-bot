@@ -1,36 +1,41 @@
 import { OpenAI } from 'openai';
 import { Pinecone } from '@pinecone-database/pinecone';
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
-const pinecone = new Pinecone({
-  apiKey: process.env.PINECONE_API_KEY!,
-});
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const PINECONE_API_KEY = process.env.PINECONE_API_KEY;
+const PINECONE_INDEX_NAME = process.env.PINECONE_INDEX_NAME; // NEW: e.g., "war-tycoon-wiki-index"
+const PINECONE_CLOUD_ENVIRONMENT = process.env.PINECONE_CLOUD_ENVIRONMENT; // NEW: e.g., "aped-4627-b74a" or the full "aws-us-east-1" style if that's what your Pinecone env is
 
 // --- START DIAGNOSTIC LOGGING ---
 console.log('--- PINEONE DIAGNOSTICS ---');
-console.log('Value of process.env.PINECONE_INDEX_HOST:', process.env.PINECONE_INDEX_HOST);
-console.log('Type of process.env.PINECONE_INDEX_HOST:', typeof process.env.PINECONE_INDEX_HOST);
-console.log('Is PINECONE_API_KEY set?', !!process.env.PINECONE_API_KEY);
-// You could also log other potentially conflicting old environment variables if you had them:
-// console.log('Value of process.env.PINECONE_ENVIRONMENT (old var):', process.env.PINECONE_ENVIRONMENT);
-// console.log('Value of process.env.PINECONE_INDEX (old var):', process.env.PINECONE_INDEX);
+console.log('Value of process.env.OPENAI_API_KEY (is set):', !!OPENAI_API_KEY);
+console.log('Value of process.env.PINECONE_API_KEY (is set):', !!PINECONE_API_KEY);
+console.log('Value of process.env.PINECONE_INDEX_NAME:', PINECONE_INDEX_NAME);
+console.log('Value of process.env.PINECONE_CLOUD_ENVIRONMENT:', PINECONE_CLOUD_ENVIRONMENT);
 console.log('--- END PINEONE DIAGNOSTICS ---');
 
-const pineconeIndexHost = process.env.PINECONE_INDEX_HOST;
+if (!OPENAI_API_KEY) console.error('CRITICAL ERROR: OPENAI_API_KEY is not set.');
+if (!PINECONE_API_KEY) console.error('CRITICAL ERROR: PINECONE_API_KEY is not set.');
+if (!PINECONE_INDEX_NAME) console.error('CRITICAL ERROR: PINECONE_INDEX_NAME is not set.');
+if (!PINECONE_CLOUD_ENVIRONMENT) console.error('CRITICAL ERROR: PINECONE_CLOUD_ENVIRONMENT is not set.');
+// --- END CHECKS ---
 
-if (!pineconeIndexHost || typeof pineconeIndexHost !== 'string' || pineconeIndexHost.trim() === '') {
-  console.error('CRITICAL ERROR: PINECONE_INDEX_HOST is not set, is not a string, or is empty in the Vercel environment.');
-  // If the host is missing or invalid, subsequent Pinecone operations will fail.
-  // You might throw an error here to stop execution if preferred:
-  // throw new Error('CRITICAL: PINECONE_INDEX_HOST environment variable is missing or invalid.');
-}
+const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 
-// The original line, now using the logged and checked variable.
-// If pineconeIndexHost is invalid, this line will likely be where Pinecone tries to use it.
-const pineconeIndex = pinecone.index(pineconeIndexHost!);
+// Initialize Pinecone with the environment if your API key spans multiple,
+// or if the client requires it to correctly route control plane calls.
+// The 'environment' here is the Pinecone environment like 'us-east-1-aws', 'gcp-starter', etc.
+// Your host "aped-4627-b74a" looks like part of a newer Pinecone environment string, often related to GCP or specific AWS regions.
+// You need to find the *full Pinecone environment string* from your Pinecone console for your index.
+const pinecone = new Pinecone({
+  apiKey: PINECONE_API_KEY!,
+  environment: PINECONE_CLOUD_ENVIRONMENT!, // This needs to be the correct Pinecone environment string
+});
+
+const pineconeIndex = pinecone.index(PINECONE_INDEX_NAME!);
 
 export default async function handler(req: any, res: any) {
-
+  // ... (CORS headers and method checks) ...
   res.setHeader('Access-Control-Allow-Origin', 'https://wartycoonai.com');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -47,16 +52,17 @@ export default async function handler(req: any, res: any) {
   if (!question || typeof question !== 'string') {
     return res.status(400).json({ error: 'Question is required.' });
   }
+  // ...
 
   try {
-    // 1. Get embedding for the question
+    // ... (your existing try block for embeddings, query, OpenAI completion)
     const embeddingResponse = await openai.embeddings.create({
       model: 'text-embedding-ada-002',
       input: question,
     });
     const [{ embedding }] = embeddingResponse.data;
 
-    // 2. Query Pinecone for relevant data
+    // Query Pinecone
     const pineconeResponse = await pineconeIndex.query({
       vector: embedding,
       topK: 5,
@@ -68,7 +74,6 @@ export default async function handler(req: any, res: any) {
       .filter(Boolean)
       .join('\n---\n');
 
-    // 3. Compose prompt for OpenAI
     const prompt = `
 You are an expert on the Roblox game War Tycoon. Use the following context to answer the user's question as accurately as possible.
 
@@ -79,7 +84,6 @@ Question: ${question}
 Answer:
     `;
 
-    // 4. Get answer from OpenAI
     const completion = await openai.chat.completions.create({
       model: 'gpt-3.5-turbo',
       messages: [{ role: 'user', content: prompt }],
@@ -88,16 +92,18 @@ Answer:
     });
 
     const answer = completion.choices[0]?.message?.content?.trim() || 'Sorry, I could not generate an answer.';
-
     res.status(200).json({ answer });
+
   } catch (error: any) {
     console.error('Error in /api/chat:', error);
     if (error.cause) {
       console.error('Caused by:', error.cause);
-      // ADDED: Log the specific hostname from the error if available
       if (error.cause.hostname) {
         console.error('Error details - hostname attempted:', error.cause.hostname);
       }
+    }
+    if (error.name === 'PineconeNotFoundError') {
+        console.error('PineconeNotFoundError details:', error.message);
     }
     res.status(500).json({ error: 'An error occurred while processing your request.' });
   }
