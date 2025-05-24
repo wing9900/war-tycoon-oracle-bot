@@ -66,7 +66,7 @@ export default async function handler(req: any, res: any) {
 
   try {
     const embeddingResponse = await openai.embeddings.create({
-      model: 'text-embedding-ada-002',
+      model: 'text-embedding-3-small',
       input: question,
     });
     const [{ embedding }] = embeddingResponse.data;
