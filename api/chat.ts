@@ -221,7 +221,7 @@ export default async function handler(req: any, res: any) {
 
     const system_prompt = `You are an expert assistant for the Roblox game War Tycoon. Your knowledge is based SOLELY on the "Context from Document(s)" provided below.
 - Answer the user's "Question" using ONLY this context.
-- Be concise and answer the question, but be sure to include relevant information from the context. Be sure to provide sufficient details to ensure the user receives a well-rounded response that enlightens and satisfies them about their question. Quote or paraphrase relevant parts of the context if helpful.
+- Be sure to answer the question and include all relevant information from the context, providing ample and sufficient details to ensure the user receives a well-rounded response that educates, enlightens, and satisfies them about their question. Quote or paraphrase other relevant parts of the context if helpful.
 - If the context does not contain the answer, you MUST state that you don't have enough information about that specific question.
 - Do NOT make up information, use external knowledge, or speculate beyond the provided context.
 - If multiple documents are provided in the context, synthesize the information if they cover different aspects of the question.
@@ -242,7 +242,7 @@ Answer:`;
         { role: 'system', content: system_prompt },
         { role: 'user', content: user_prompt }
       ],
-      max_tokens: 500, 
+      max_tokens: 700, 
       temperature: 0.1, 
     });
 
