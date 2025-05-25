@@ -1,5 +1,5 @@
 import { OpenAI } from 'openai';
-import { Pinecone } from '@pinecone-database/pinecone';
+import { Pinecone, type ScoredPineconeRecord } from '@pinecone-database/pinecone'; // Import ScoredPineconeRecord for match typing
 
 // Read environment variables that are DEFINED in your Vercel settings
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
@@ -29,20 +29,22 @@ if (!PINECONE_INDEX_NAME) {
 // --- END CHECKS ---
 
 const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
-const pinecone = new Pinecone({ apiKey: PINECONE_API_KEY });
+const pinecone = new Pinecone({ apiKey: PINECONE_API_KEY }); // Removed '!' for safety, checks above should suffice
+
+if (!PINECONE_INDEX_NAME) { // Additional runtime check for TypeScript's benefit
+  throw new Error('CRITICAL: PINECONE_INDEX_NAME is effectively null or undefined after checks.');
+}
 const pineconeIndex = pinecone.index(PINECONE_INDEX_NAME);
 
-// --- TypeScript Interfaces for Metadata (Recommended for larger projects) ---
+// --- TypeScript Interfaces for Metadata ---
 interface BaseMetadata {
   entity_type?: string;
   item_name?: string;
   info_type?: string;
   text_content_source?: string;
-  // Add any other fields that are TRULY common to ALL metadata objects
-  [key: string]: any; // Allow other dynamic properties
+  [key: string]: any; 
 }
 
-// Example specific metadata type (you would define more as needed)
 interface AircraftGeneralInfoMetadata extends BaseMetadata {
   price?: number;
   currency?: string;
@@ -50,29 +52,31 @@ interface AircraftGeneralInfoMetadata extends BaseMetadata {
   unlock_details?: string;
   armament_summary?: string[];
   utility?: string[];
-  // ... other specific fields
+  speed_min_display?: string;
+  speed_max_display?: string;
+  health_min_display?: string;
+  health_max_display?: string;
 }
 
+// Define other specific metadata interfaces as you add more entity types...
 
 // --- Helper function to format retrieved context ---
-function formatRetrievedContext(matches: any[]): string {
+function formatRetrievedContext(matches: ScoredPineconeRecord<BaseMetadata>[]): string {
   if (!matches || matches.length === 0) {
     return "No relevant information was found in the knowledge base for this query.";
   }
 
   return matches.map((match, index) => {
-    const metadata = (match.metadata || {}) as BaseMetadata; // Ensure metadata exists, cast to base
+    const metadata = match.metadata || {}; // Ensure metadata object exists
     const id = match.id || "N/A";
-    const score = match.score !== undefined ? match.score.toFixed(4) : "N/A";
+    const score = match.score !== undefined ? match.score.toFixed(4) : "N/A (Directly Fetched)"; // Adjust score display for fetched items
     const textSource = metadata.text_content_source || "No source text available for this chunk.";
     
     let details = `Item: ${metadata.item_name || "Unknown Item"}\nType: ${metadata.info_type || "General Information"}\n`;
 
-    // --- Conditional logic based on entity_type and info_type ---
-    // This section needs to be expanded as you add more entity types and info types
     if (metadata.entity_type === 'aircraft') {
       if (metadata.info_type === 'general_info') {
-        const acMeta = metadata as AircraftGeneralInfoMetadata; // Use specific interface if defined
+        const acMeta = metadata as AircraftGeneralInfoMetadata;
         details += `Price: ${acMeta.currency || ''}${acMeta.price !== undefined ? acMeta.price : "N/A"}\n`;
         details += `Unlock: ${acMeta.unlock_method || "N/A"} (${acMeta.unlock_details || "N/A"})\n`;
         if (acMeta.armament_summary && acMeta.armament_summary.length > 0) {
@@ -81,8 +85,8 @@ function formatRetrievedContext(matches: any[]): string {
         if (acMeta.utility && acMeta.utility.length > 0) {
           details += `Utilities: ${acMeta.utility.join(', ')}\n`;
         }
-        details += `Speed: ${acMeta.speed_min_display || '[TBA]'} - ${acMeta.speed_max_display || '[TBA]'} MPH\n`;
-        details += `Health: ${acMeta.health_min_display || '[TBA]'} - ${acMeta.health_max_display || '[TBA]'} HP\n`;
+        details += `Display Speed: ${acMeta.speed_min_display || '[TBA]'} - ${acMeta.speed_max_display || '[TBA]'} MPH\n`;
+        details += `Display Health: ${acMeta.health_min_display || '[TBA]'} - ${acMeta.health_max_display || '[TBA]'} HP\n`;
       } else if (metadata.info_type === 'stat_speed') {
         details += `Non-Upgraded Speed: ${metadata.display_speed_non_upgraded || "[TBA]"} MPH (Value: ${metadata.speed_nu_val ?? "[TBA]"})\n`;
         details += `Tier 1 Speed: ${metadata.display_speed_tier_1 || "[TBA]"} MPH (Value: ${metadata.speed_t1_val ?? "[TBA]"})\n`;
@@ -97,7 +101,8 @@ function formatRetrievedContext(matches: any[]): string {
         details += `Weapon Stats for: ${metadata.armament || "N/A"}\n`;
         details += `  Damage (Non-Upgraded): ${metadata.display_fp_non_upgraded || "[TBA]"} (Value: ${metadata.fp_nu_val ?? "[TBA]"})\n`;
         details += `  Damage (Tier 1): ${metadata.display_fp_tier_1 || "[TBA]"} (Value: ${metadata.fp_t1_val ?? "[TBA]"})\n`;
-        // Add T2, T3 similarly
+        details += `  Damage (Tier 2): ${metadata.display_fp_tier_2 || "[TBA]"} (Value: ${metadata.fp_t2_val ?? "[TBA]"})\n`;
+        details += `  Damage (Tier 3): ${metadata.display_fp_tier_3 || "[TBA]"} (Value: ${metadata.fp_t3_val ?? "[TBA]"})\n`;
       } else if (metadata.info_type === 'armament_description') {
           details += `Described Weapon: ${metadata.weapon_name || "N/A"} (Count: ${metadata.count || "N/A"})\n`;
           if (metadata.characteristics && metadata.characteristics.length > 0) {
@@ -107,27 +112,25 @@ function formatRetrievedContext(matches: any[]): string {
           if (metadata.key_periods && metadata.key_periods.length > 0) {
               details += `Key Periods: ${metadata.key_periods.join(', ')}\n`;
           }
+      } else if (metadata.info_type === 'overview_concise') {
+          details += `Role: ${metadata.role || "N/A"}\n`;
+          if (metadata.strengths && metadata.strengths.length > 0) details += `Strengths: ${metadata.strengths.join('; ')}\n`;
+          if (metadata.weaknesses && metadata.weaknesses.length > 0) details += `Weaknesses: ${metadata.weaknesses.join('; ')}\n`;
+      } else if (metadata.info_type === 'category_membership') {
+          details += `Category: ${metadata.aircraft_category || "N/A"}\n`;
       }
-      // Add more 'else if' blocks for other aircraft info_types (overview_concise, category_membership)
-      // and for other entity_types as you add them.
-    
-    } else if (metadata.entity_type === 'tank') { // Example for future expansion
-        details += `Tank Specific Detail: ${metadata.some_tank_field || "N/A"}\n`;
-    } else if (metadata.entity_type === 'gun') { // Example for future expansion
-        details += `Gun Specific Detail: ${metadata.some_gun_field || "N/A"}\n`;
-    }
-    // Add more top-level else if (metadata.entity_type === '...') blocks
+    } 
+    // Add 'else if (metadata.entity_type === 'tank') { ... }' blocks here for other entity types
 
     return `--- Context Chunk ${index + 1} (ID: ${id}, Score: ${score}) ---\n${details.trim()}\nFull Text Context:\n${textSource}\n---`;
-  }).join('\n\n'); // Separate different chunks with a double newline for clarity
+  }).join('\n\n');
 }
 
 
 export default async function handler(req: any, res: any) {
-  // CORS and Method Check
-  res.setHeader('Access-Control-Allow-Origin', '*'); // More permissive for local dev, tighten for prod
+  res.setHeader('Access-Control-Allow-Origin', '*'); 
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization'); // Add Authorization if you use it
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -150,17 +153,67 @@ export default async function handler(req: any, res: any) {
     });
     const [{ embedding }] = embeddingResponse.data;
 
-    console.log('Querying Pinecone with topK=5...');
-    const pineconeResponse = await pineconeIndex.query({
+    console.log('Querying Pinecone with topK=3 for initial semantic matches...');
+    const initialPineconeResponse = await pineconeIndex.query({
       vector: embedding,
-      topK: 5, 
+      topK: 3, 
       includeMetadata: true,
     });
-    console.log('Pinecone query successful.');
-    // console.log('Raw Pinecone query response:', JSON.stringify(pineconeResponse, null, 2)); // For detailed debugging
+    console.log('Initial Pinecone query successful.');
 
+    let finalMatches: ScoredPineconeRecord<BaseMetadata>[] = initialPineconeResponse.matches || [];
+    let primaryItemName: string | undefined;
 
-    const contexts = formatRetrievedContext(pineconeResponse.matches || []); // Pass empty array if matches is undefined
+    if (finalMatches.length > 0 && finalMatches[0].metadata) {
+      primaryItemName = finalMatches[0].metadata.item_name;
+    } else {
+      // Basic attempt to parse item name from question if no initial matches
+      // This needs to be robust and list your known game items
+      const knownItems = ["P-51 Mustang", "MiG-29 Fulcrum"]; // Expand this list
+      for (const item of knownItems) {
+        if (question.toLowerCase().includes(item.toLowerCase())) {
+          primaryItemName = item;
+          break;
+        }
+      }
+    }
+    
+    if (primaryItemName) {
+      const itemNameSnakeCase = primaryItemName.toLowerCase().replace(/ /g, '_').replace(/-/g, '_').replace(/\./g, '').replace(/\//g, '_');
+      const overviewFullTextId = `${itemNameSnakeCase}_overview_full_text`;
+      const isOverviewAlreadyFetched = finalMatches.some(match => match.id === overviewFullTextId);
+
+      if (!isOverviewAlreadyFetched) {
+        console.log(`Workspaceing overview_full_text for ${primaryItemName} (ID: ${overviewFullTextId})...`);
+        try {
+          const fetchResponse = await pineconeIndex.fetch([overviewFullTextId]);
+          const overviewRecord = fetchResponse.records?.[overviewFullTextId]; // Use optional chaining
+          if (overviewRecord) {
+            // Construct a "match-like" object to add to finalMatches
+            // The fetched record has id, metadata, and values. Score isn't applicable here.
+            const fetchedMatch: ScoredPineconeRecord<BaseMetadata> = {
+              id: overviewRecord.id,
+              score: 1.0, // Assign a high score or indicate it was directly fetched
+              metadata: overviewRecord.metadata as BaseMetadata || {},
+              // values: overviewRecord.values // We don't need values for context string
+            };
+            finalMatches.unshift(fetchedMatch); // Prepend overview to prioritize it
+            console.log(`Successfully fetched and added ${overviewFullTextId} to context.`);
+          } else {
+              console.log(`Could not fetch record for ${overviewFullTextId}`);
+          }
+        } catch (fetchError: any) {
+          console.error(`Error fetching ${overviewFullTextId}:`, fetchError.message || fetchError);
+        }
+      } else {
+          console.log(`Overview_full_text for ${primaryItemName} was already in initial semantic matches.`);
+      }
+    }
+
+    // Remove duplicates by ID if any arose (e.g., if overview was fetched and also in initial query)
+    const uniqueMatches = Array.from(new Map(finalMatches.map(match => [match.id, match])).values());
+
+    const contexts = formatRetrievedContext(uniqueMatches);
     
     console.log('--- COMBINED CONTEXT FOR OPENAI (first 1500 chars) ---');
     console.log(contexts.length > 0 ? contexts.substring(0, 1500) + (contexts.length > 1500 ? '...' : '') : 'Context is empty.');
@@ -206,10 +259,7 @@ Answer:`;
     } else if (error.message) {
         errorMessage = error.message;
     }
-    // Log more details for server-side debugging
-    if (error.name && error.name.startsWith('Pinecone')) {
-        console.error('Pinecone specific error:', error.message);
-    }
-    res.status(500).json({ error: errorMessage });
+    console.error('Full error object:', JSON.stringify(error, null, 2));
+    res.status(500).json({ error: errorMessage, details: JSON.stringify(error, Object.getOwnPropertyNames(error)) });
   }
 }
