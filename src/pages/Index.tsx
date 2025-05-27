@@ -59,7 +59,7 @@ const Index = () => {
 
   return (
     <div className="flex flex-col h-screen bg-black overflow-hidden">
-      <h1 className="text-5xl md:text-6xl font-bold py-8 text-center tracking-wider whitespace-nowrap animate-pulse">
+      <h1 className="text-5xl md:text-6xl font-bold py-8 text-center tracking-wider whitespace-nowrap">
         <span className="bg-gradient-to-r from-orange-500 via-yellow-500 to-red-600 bg-clip-text text-transparent">
           WAR TYCOON
         </span>
