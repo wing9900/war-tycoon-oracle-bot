@@ -321,7 +321,7 @@ Answer:`;
         { role: 'system', content: system_prompt },
         { role: 'user', content: user_prompt }
       ],
-      max_tokens: 900, 
+      max_tokens: 750, 
       temperature: 0.1, 
     });
 
