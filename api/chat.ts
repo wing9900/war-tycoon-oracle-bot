@@ -42,13 +42,11 @@ interface BaseMetadata {
   item_name?: string;
   info_type?: string;
   text_content_source?: string;
-  [key: string]: any; // Allow other dynamic properties for flexibility
+  [key: string]: any; 
 }
 
-// Define more specific interfaces as you add more entity types and info_types
-// For example:
 interface AircraftGeneralInfoMetadata extends BaseMetadata {
-  price?: number | string; // Can be number or string like "N/A"
+  price?: number | string; 
   currency?: string | null;
   unlock_method?: string;
   unlock_details?: string;
@@ -65,57 +63,6 @@ interface AircraftGeneralInfoMetadata extends BaseMetadata {
   parts_cost_engines?: number | string;
 }
 
-interface AircraftStatMetadata extends BaseMetadata {
-    unit?: string;
-    speed_nu_val?: number | string;
-    speed_t1_val?: number | string;
-    speed_t2_val?: number | string;
-    speed_t3_val?: number | string;
-    display_speed_non_upgraded?: string;
-    display_speed_tier_1?: string;
-    display_speed_tier_2?: string;
-    display_speed_tier_3?: string;
-    health_nu_val?: number | string;
-    health_t1_val?: number | string;
-    health_t2_val?: number | string;
-    health_t3_val?: number | string;
-    display_health_non_upgraded?: string;
-    display_health_tier_1?: string;
-    display_health_tier_2?: string;
-    display_health_tier_3?: string;
-}
-
-interface AircraftFirepowerStatMetadata extends BaseMetadata {
-    armament?: string;
-    unit?: string;
-    fp_nu_val?: number | string;
-    fp_t1_val?: number | string;
-    fp_t2_val?: number | string;
-    fp_t3_val?: number | string;
-    display_fp_non_upgraded?: string;
-    display_fp_tier_1?: string;
-    display_fp_tier_2?: string;
-    display_fp_tier_3?: string;
-}
-
-interface AircraftArmamentDescMetadata extends BaseMetadata {
-    weapon_slot?: string;
-    weapon_name?: string;
-    weapon_type_general?: string;
-    count?: number;
-    characteristics?: string[];
-    notes?: string;
-}
-
-interface AircraftOverviewConciseMetadata extends BaseMetadata {
-    strengths?: string[];
-    weaknesses?: string[];
-    role?: string;
-    utility_summary_for_concise?: string[];
-    playstyle_notes?: string;
-}
-
-
 // --- Helper function to format retrieved context ---
 function formatRetrievedContext(matches: ScoredPineconeRecord<BaseMetadata>[]): string {
   if (!matches || matches.length === 0) {
@@ -131,7 +78,7 @@ function formatRetrievedContext(matches: ScoredPineconeRecord<BaseMetadata>[]): 
     let details = `Item Name: ${metadata.item_name || "Unknown Item"}\nEntity Type: ${metadata.entity_type || "Unknown"}\nInfo Type: ${metadata.info_type || "General"}\n`;
 
     if (metadata.entity_type === 'aircraft') {
-      const acMeta = metadata as any; // Using 'any' for simplicity, but specific interfaces are better
+      const acMeta = metadata as any; 
       if (acMeta.info_type === 'general_info') {
         details += `Price/Unlock: ${acMeta.price !== undefined && acMeta.price !== "N/A" ? (acMeta.currency || '') + acMeta.price : acMeta.unlock_method || 'N/A'}\n`;
         details += `Unlock Details: ${acMeta.unlock_details || "N/A"}\n`;
@@ -186,23 +133,12 @@ function formatRetrievedContext(matches: ScoredPineconeRecord<BaseMetadata>[]): 
       } else if (acMeta.info_type === 'category_membership') {
           details += `Category: ${acMeta.aircraft_category || "N/A"}\n`;
       }
-      // Add more 'else if' for other aircraft info_types as needed.
     } 
-    // --- EXPAND HERE: Add 'else if (metadata.entity_type === 'tank') { ... }' blocks for other entity types ---
-    // Example for a hypothetical 'tank' entity:
-    // else if (metadata.entity_type === 'tank') {
-    //   const tankMeta = metadata as any; // Replace 'any' with specific Tank interfaces
-    //   if (tankMeta.info_type === 'tank_general_info') {
-    //     details += `Crew Size: ${tankMeta.crew_size || "N/A"}\n`;
-    //     details += `Main Armament: ${tankMeta.main_armament_type || "N/A"}\n`;
-    //   }
-    //   // Add other tank info_types
-    // }
+    // --- EXPAND HERE: Add 'else if (metadata.entity_type === 'tank') { ... }' etc. ---
 
     return `--- Context Chunk ${index + 1} (ID: ${id}, Score: ${score}) ---\n${details.trim()}\nFull Text Context:\n${textSource}\n---`;
-  }).join('\n\n'); // Separate different chunks with a double newline for clarity
+  }).join('\n\n');
 }
-
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*'); 
@@ -241,12 +177,11 @@ export default async function handler(req: any, res: any) {
     let finalMatches: ScoredPineconeRecord<BaseMetadata>[] = initialPineconeResponse.matches || [];
     let primaryItemName: string | undefined;
 
-    // Attempt to determine the primary item from the top semantic match or question
     if (finalMatches.length > 0 && finalMatches[0].metadata) {
       primaryItemName = finalMatches[0].metadata.item_name;
     }
     if (!primaryItemName && question) { 
-      // EXPAND THIS LIST WITH ALL YOUR GAME ITEM NAMES
+      // <<< EXPAND THIS LIST WITH ALL YOUR GAME ITEM NAMES for better primary item detection >>>
       const knownItems = ["P-51 Mustang", "MiG-29 Fulcrum", "Spitfire"]; 
       for (const item of knownItems) {
         if (question.toLowerCase().includes(item.toLowerCase())) {
@@ -260,35 +195,48 @@ export default async function handler(req: any, res: any) {
     if (primaryItemName) {
       const itemNameSnakeCase = primaryItemName.toLowerCase().replace(/ /g, '_').replace(/-/g, '_').replace(/\./g, '').replace(/\//g, '_');
       const overviewFullTextId = `${itemNameSnakeCase}_overview_full_text`;
-      
-      const isOverviewAlreadyFetched = finalMatches.some(match => match.id === overviewFullTextId);
+      const generalInfoId = `${itemNameSnakeCase}_general_info`; // Also fetch general_info
 
-      if (!isOverviewAlreadyFetched) {
-        console.log(`Attempting to fetch overview_full_text for ${primaryItemName} (ID: ${overviewFullTextId})...`);
+      const idsToFetchIfNeeded: string[] = [];
+      if (!finalMatches.some(match => match.id === overviewFullTextId)) {
+        idsToFetchIfNeeded.push(overviewFullTextId);
+      }
+      if (!finalMatches.some(match => match.id === generalInfoId)) {
+        idsToFetchIfNeeded.push(generalInfoId);
+      }
+      
+      if (idsToFetchIfNeeded.length > 0) {
+        console.log(`Attempting to fetch essential chunks for ${primaryItemName}: ${idsToFetchIfNeeded.join(', ')}...`);
         try {
-          const fetchResponse = await pineconeIndex.fetch([overviewFullTextId]);
-          const overviewRecord = fetchResponse.records?.[overviewFullTextId];
-          if (overviewRecord && overviewRecord.metadata) { // Check if record and metadata exist
-            const fetchedMatch: ScoredPineconeRecord<BaseMetadata> = {
-              id: overviewRecord.id, 
-              score: 1.0, 
-              metadata: (overviewRecord.metadata as BaseMetadata), // Cast and ensure it's not null
-            };
-            finalMatches.unshift(fetchedMatch); 
-            console.log(`Successfully fetched and added ${overviewFullTextId} to context.`);
-          } else {
-              console.log(`Could not fetch or find metadata for record ${overviewFullTextId}.`);
+          const fetchResponse = await pineconeIndex.fetch(idsToFetchIfNeeded);
+          if (fetchResponse.records) {
+            for (const idToFetch of idsToFetchIfNeeded) {
+              const record = fetchResponse.records[idToFetch];
+              if (record && record.metadata) {
+                const fetchedMatch: ScoredPineconeRecord<BaseMetadata> = {
+                  id: record.id, 
+                  score: 0.98, // Assign a high score to indicate importance / direct fetch
+                  metadata: (record.metadata as BaseMetadata),
+                };
+                finalMatches.push(fetchedMatch); // Add to the list
+                console.log(`Successfully fetched and added ${idToFetch} to context.`);
+              } else {
+                console.log(`Could not fetch or find metadata for record ${idToFetch}.`);
+              }
+            }
           }
         } catch (fetchError: any) {
-          console.error(`Error fetching ${overviewFullTextId}:`, fetchError.message || fetchError);
+          console.error(`Error fetching essential chunks for ${primaryItemName}:`, fetchError.message || fetchError);
         }
       } else {
-          console.log(`Overview_full_text for ${primaryItemName} was already in initial semantic matches.`);
+          console.log(`Essential chunks for ${primaryItemName} were likely already in initial semantic matches.`);
       }
     }
 
+    // Sort by score (descending) and then remove duplicates by ID, keeping the one with higher score or first encountered
+    finalMatches.sort((a, b) => (b.score || 0) - (a.score || 0));
     const uniqueMatches = Array.from(new Map(finalMatches.map(match => [match.id, match])).values());
-    const limitedMatches = uniqueMatches.slice(0, 5); // Limit total context chunks to ~5
+    const limitedMatches = uniqueMatches.slice(0, 7); // Limit total context chunks, adjust as needed
 
     const contexts = formatRetrievedContext(limitedMatches);
     
@@ -297,11 +245,11 @@ export default async function handler(req: any, res: any) {
     console.log('--- END COMBINED CONTEXT FOR OPENAI ---');
 
     const system_prompt = `You are an expert assistant for the Roblox game War Tycoon. Your knowledge is based SOLELY on the "Context from Document(s)" provided below.
-- Answer the user's "Question" using ONLY the information you have been provided.
-- If the user is seeking an overview about an item, utilize the information in the 'Full Text Context' of the 'overview_full_text' chunk primarily, and supplement with key details from 'general_info' and other relevant chunks. Be sure you include important information like price/unlock conditions, key stats (speed, health), primary armaments, utilities, seating capacity, component counts, spawn parts costs, and a summary of strengths and weaknesses if available in the context. Aim for a comprehensive yet balanced answer.
+- Answer the user's "Question" using ONLY this context.
+- If the user is seeking an overview about an item (for example, if the user says "tell me about the p-51 plane"), utilize the information in the 'Full Text Context' of the 'overview_full_text' chunk primarily, and supplement with key details from 'general_info' and other relevant chunks. Be sure to include important information like price/unlock conditions, key stats (speed, health), primary armaments, utilities, seating capacity, component counts, spawn parts costs, and a summary of strengths and weaknesses if available in the context. Aim for a comprehensive yet balanced answer.
 - For "general_info" chunks, "parts_cost_hulls", "parts_cost_weapon_systems", and "parts_cost_engines" refer to the number of specific parts required to spawn or respawn the item. This is different from 'hulls_component_count', 'engines_component_count' (which are actual components of the vehicle) or 'armament_summary' (which lists the equipped weapons).
 - If you are asked for the stats of an item,make sure you provide all of the stats that they want!
-- If you are asked to compare items in the game, be sure to include all the important imformation, including: the price, stats, armament(s), utility information, seating capacity, strengths, weaknesses, unlock method, and unlock details FOR EACH OF THE ITEMS.
+- If you are asked to compare items in the game, be sure to include all the important information, including: the price, stats, armament(s), utility information, seating capacity, strengths, weaknesses, unlock method, and unlock details FOR EACH OF THE ITEMS if context is provided for them.
 - If the context does not contain the answer, you MUST state that the information is not available in your current knowledge base for that specific question.
 - If the user's input is not rational, kindly ask them to clarify their question.
 - Do NOT make up information, use external knowledge, or speculate beyond the provided context.
@@ -323,7 +271,7 @@ Answer:`;
         { role: 'system', content: system_prompt },
         { role: 'user', content: user_prompt }
       ],
-      max_tokens: 750, 
+      max_tokens: 1024, // Increased for potentially more detailed answers
       temperature: 0.1, 
     });
 
@@ -340,11 +288,7 @@ Answer:`;
     } else if (error.message) {
         errorMessage = error.message;
     }
-    // Log more details for server-side debugging
-    if (error.name && error.name.startsWith('Pinecone')) { // Example check
-        console.error('Pinecone specific error:', error.message);
-    }
-    console.error('Full error object:', JSON.stringify(error, null, 2)); // Helps debug further
+    console.error('Full error object:', JSON.stringify(error, null, 2));
     res.status(500).json({ error: errorMessage, details: JSON.stringify(error, Object.getOwnPropertyNames(error)) });
   }
 }
