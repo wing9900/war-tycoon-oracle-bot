@@ -182,7 +182,6 @@ function formatRetrievedContext(matches: ScoredPineconeRecord<BaseMetadata>[]): 
         if (acMeta.display_health_tier_2 !== undefined) details += `  Tier 2: ${acMeta.display_health_tier_2} (Value: ${acMeta.health_t2_val ?? "[TBA]"})\n`;
         if (acMeta.display_health_tier_3 !== undefined) details += `  Tier 3: ${acMeta.display_health_tier_3} (Value: ${acMeta.health_t3_val ?? "[TBA]"})\n`;
       }
-      // ... other aircraft info_type handlers (armament_description, history, overview_concise, category_membership) ...
        else if (acMeta.info_type === 'armament_description') {
           details += `Described Weapon: ${acMeta.weapon_name || "N/A"} (Count: ${acMeta.count ?? "N/A"}, Type: ${acMeta.weapon_type_general || "N/A"})\n`;
           if (acMeta.characteristics && acMeta.characteristics.length > 0) {
@@ -238,7 +237,7 @@ export default async function handler(req: any, res: any) {
     console.log('Querying Pinecone with topK=5 for initial semantic matches...');
     const initialPineconeResponse = await pineconeIndex.query({
       vector: embedding,
-      topK: 5, // Consider adjusting based on typical query complexity
+      topK: 5,
       includeMetadata: true,
     });
     console.log('Initial Pinecone query successful. Matches found:', initialPineconeResponse.matches?.length || 0);
@@ -258,7 +257,7 @@ export default async function handler(req: any, res: any) {
           const summaryMatch: ScoredPineconeRecord<BaseMetadata> = {
             id: summaryRecord.id, score: 1.0, metadata: (summaryRecord.metadata as BaseMetadata),
           };
-          finalMatches.unshift(summaryMatch); // Prioritize this summary
+          finalMatches.unshift(summaryMatch);
           console.log(`Successfully fetched and prepended ${ALL_PLANES_SUMMARY_DOC_ID}.`);
         } else {
           console.log(`Could not fetch or find metadata for summary record ${ALL_PLANES_SUMMARY_DOC_ID}.`);
@@ -268,11 +267,9 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    // Attempt to identify primary item from semantic matches if not an "all planes" query (or if its summary failed)
     if (!isAllPlanesQuery || (isAllPlanesQuery && !finalMatches.some(m => m.id === ALL_PLANES_SUMMARY_DOC_ID))) {
         for (const match of finalMatches) {
-            if (match.metadata?.item_name && match.metadata?.entity_type) { // Ensure item_name and entity_type exist
-                // Check if any known item name or alias is in the query, and if it matches the item_name from metadata
+            if (match.metadata?.item_name && match.metadata?.entity_type) {
                 const foundKnownItem = KNOWN_GAME_ITEMS.find(knownItem => {
                     const itemNameInQuery = lowerCaseQuestion.includes(knownItem.name.toLowerCase()) ||
                                           knownItem.aliases.some(alias => lowerCaseQuestion.includes(alias.toLowerCase()));
@@ -280,16 +277,15 @@ export default async function handler(req: any, res: any) {
                 });
 
                 if (foundKnownItem) {
-                    primaryItemName = foundKnownItem.name; // Use canonical name
+                    primaryItemName = foundKnownItem.name;
                     primaryItemEntityType = foundKnownItem.entityType;
                     console.log(`Primary item "${primaryItemName}" (Type: ${primaryItemEntityType}) identified from semantic match and question keywords.`);
-                    break; // Found a good candidate
+                    break; 
                 }
             }
         }
     }
     
-    // Fallback: Identify primary item from keywords if not found via semantic matches linked to question content
     if (!primaryItemName && !isAllPlanesQuery) {
       for (const item of KNOWN_GAME_ITEMS) {
         if (lowerCaseQuestion.includes(item.name.toLowerCase())) {
@@ -299,7 +295,7 @@ export default async function handler(req: any, res: any) {
         }
         for (const alias of item.aliases) {
           if (lowerCaseQuestion.includes(alias.toLowerCase())) {
-            primaryItemName = item.name; // Use canonical name
+            primaryItemName = item.name;
             primaryItemEntityType = item.entityType;
             break;
           }
@@ -313,7 +309,7 @@ export default async function handler(req: any, res: any) {
 
 
     if (primaryItemName && primaryItemEntityType === 'aircraft') {
-      const itemNameSnakeCase = primaryItemName.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/_{2,}/g, '_'); // More robust snake_case
+      const itemNameSnakeCase = primaryItemName.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/_{2,}/g, '_');
       const overviewFullTextId = `${itemNameSnakeCase}_overview_full_text`;
       const generalInfoId = `${itemNameSnakeCase}_general_info`;
       const statSpeedId = `${itemNameSnakeCase}_stat_speed`;
@@ -326,12 +322,17 @@ export default async function handler(req: any, res: any) {
 
       const requestsSpecificSpeed = SPEED_STAT_KEYWORDS.some(kw => lowerCaseQuestion.includes(kw));
       const requestsSpecificHealth = HEALTH_STAT_KEYWORDS.some(kw => lowerCaseQuestion.includes(kw));
-      const requestsGeneralItemStats = GENERAL_STAT_KEYWORDS.some(kw => lowerCaseQuestion.includes(kw)) && 
-                                       (lowerCaseQuestion.includes(primaryItemName.toLowerCase()) || KNOWN_GAME_ITEMS.find(i=>i.name === primaryItemName)?.aliases.some(a => lowerCaseQuestion.includes(a)));
+      
+      let requestsGeneralItemStats = false;
+      const primaryItemKeywords = [primaryItemName.toLowerCase(), ...(KNOWN_GAME_ITEMS.find(i => i.name === primaryItemName)?.aliases || [])];
+      if (primaryItemKeywords.some(pik => lowerCaseQuestion.includes(pik))) {
+          if (GENERAL_STAT_KEYWORDS.some(gsk => lowerCaseQuestion.includes(gsk))) {
+              requestsGeneralItemStats = true;
+          }
+      }
       
       console.log(`For ${primaryItemName}: requestsSpecificSpeed=${requestsSpecificSpeed}, requestsSpecificHealth=${requestsSpecificHealth}, requestsGeneralItemStats=${requestsGeneralItemStats}`);
 
-      // Fetch detailed stats if specifically asked, or if it's a general stat request for the item
       if (requestsSpecificSpeed || requestsGeneralItemStats) {
         if (!finalMatches.some(match => match.id === statSpeedId)) {
           idsToFetchIfNeeded.push(statSpeedId);
@@ -354,7 +355,7 @@ export default async function handler(req: any, res: any) {
               const record = fetchResponse.records[idToFetch];
               if (record && record.metadata) {
                 const fetchedMatch: ScoredPineconeRecord<BaseMetadata> = {
-                  id: record.id, score: 0.99, // High score for directly fetched supporting docs
+                  id: record.id, score: 0.99, 
                   metadata: (record.metadata as BaseMetadata),
                 };
                 finalMatches.push(fetchedMatch);
@@ -370,10 +371,9 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    // Sort by score and then ensure unique IDs, keeping the one with higher score if duplicated
     finalMatches.sort((a, b) => (b.score || 0) - (a.score || 0));
     const uniqueMatches = Array.from(new Map(finalMatches.map(match => [match.id, match])).values());
-    const limitedMatches = uniqueMatches.slice(0, 10); // Adjust as needed
+    const limitedMatches = uniqueMatches.slice(0, 10); 
 
     const contexts = formatRetrievedContext(limitedMatches);
 
@@ -387,12 +387,14 @@ export default async function handler(req: any, res: any) {
 - For individual items, if the user is seeking an overview (e.g., "tell me about the p-51 plane"), utilize 'overview_full_text' primarily, and supplement with 'general_info' and any available detailed stat chunks (like 'stat_speed', 'stat_health'). Include price/unlock, key stats (overall range AND tiered stats like non-upgraded, Tier 1, Tier 2, Tier 3 if available), armaments, utilities, seating capacity, component counts, spawn parts costs, and strengths/weaknesses if available.
 - If detailed tiered stats (non-upgraded, Tier 1, etc.) for speed or health are present in the context (usually from 'stat_speed' or 'stat_health' info_type), prioritize showing them clearly. The 'Display Speed Range' and 'Display Health Range' from 'general_info' provide an overall summary and can be mentioned as well.
 - "parts_cost_hulls", "parts_cost_weapon_systems", and "parts_cost_engines" are spawn/respawn costs.
-- If asked for stats, provide all available stats from the context.
-- When presenting detailed statistics for an item, or when comparing multiple items, organize the information clearly.
-- If multiple attributes (e.g., Price, Speed, Health, Armaments, Unlock Method, Seating Capacity, Tiered Stats) are being presented for one or more items, format this information as a Markdown table where appropriate for clarity and organization.
-- For example, if providing a full stat sheet for a plane, a table is preferred. If comparing planes, use a table with planes as rows and stats as columns.
-- For tiered stats (Non-Upgraded, Tier 1, Tier 2, Tier 3), list them clearly, possibly within a table cell (e.g., "Speed (NU | T1 | T2 | T3)") or as separate rows if that provides better clarity (e.g. Speed (Non-Upgraded), Speed (Tier 1), etc.). Choose the clearest representation.
-- If the context does NOT contain the answer (e.g., specific details for an item not listed, or a comprehensive list if no summary document was found/provided, or tiered stats if only a general range is available), you MUST state that the information is not available in your current knowledge base for that specific question. Do not apologize unless it's a system error. If presenting a table and some data points are missing, indicate 'N/A' or 'Not specified' within the table cell for that specific data point.
+- If asked for stats, provide all available stats from the context in a clear, organized, and easy-to-read format. Use bullet points or descriptive paragraphs for different categories of information. Avoid complex table structures unless the data is very extensive and a table is the only clear way.
+- For tiered stats (Non-Upgraded, Tier 1, Tier 2, Tier 3), list them clearly, for example:
+  Speed:
+  - Non-Upgraded: [Value]
+  - Tier 1: [Value]
+  - Tier 2: [Value]
+  - Tier 3: [Value]
+- If the context does NOT contain the answer (e.g., specific details for an item not listed, or a comprehensive list if no summary document was found/provided, or tiered stats if only a general range is available), you MUST state that the information is not available in your current knowledge base for that specific question. Do not apologize unless it's a system error. If some data points are missing, indicate 'N/A' or 'Not specified' for that specific data point.
 - Do NOT make up information, use external knowledge, or speculate.
 - Synthesize information if multiple documents cover different aspects.
 - If context is irrelevant, indicate that. If the question is irrational, ask for clarification.`;
@@ -412,7 +414,7 @@ Answer:`;
         { role: 'system', content: system_prompt },
         { role: 'user', content: user_prompt }
       ],
-      max_tokens: 2000,
+      max_tokens: 2000, 
       temperature: 0.1,
     });
 
