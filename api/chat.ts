@@ -60,6 +60,7 @@ interface BaseMetadata {
     speed_range?: string;
     health_range?: string;
   }>;
+  // Fields for stat_speed, stat_health etc. (can be caught by [key: string]: any)
   unit?: string;
   display_speed_non_upgraded?: string; speed_nu_val?: number | string;
   display_speed_tier_1?: string; speed_t1_val?: number | string;
@@ -104,11 +105,11 @@ function formatRetrievedContext(matches: ScoredPineconeRecord<BaseMetadata>[]): 
     const textSource = metadata.text_content_source || "No source text available for this chunk.";
 
     let details = `Item Name: ${metadata.item_name || "Unknown Item"}\nEntity Type: ${metadata.entity_type || "Unknown"}\nInfo Type: ${metadata.info_type || "General"}\n`;
-    const acMeta = metadata as any;
+    const acMeta = metadata as any; // Using 'any' for flexibility, maps to relevant metadata fields
 
     if (id === ALL_PLANES_SUMMARY_DOC_ID && acMeta.planes_summary && Array.isArray(acMeta.planes_summary)) {
       details += "Summary of All Aircraft:\n";
-      acMeta.planes_summary.forEach((plane: any) => {
+      acMeta.planes_summary.forEach((plane: any) => { // Explicitly type plane as any or a defined interface
         details += `  - Name: ${plane.name || 'N/A'}\n`;
         if (plane.price) details += `    Price/Unlock: ${plane.price}${plane.unlock_method ? ` (${plane.unlock_method})` : ''}\n`;
         if (plane.seating_capacity) details += `    Seating: ${plane.seating_capacity}\n`;
@@ -148,6 +149,7 @@ function formatRetrievedContext(matches: ScoredPineconeRecord<BaseMetadata>[]): 
         if (acMeta.parts_cost_weapon_systems !== undefined) spawnCosts.push(`Weapon Systems: ${acMeta.parts_cost_weapon_systems}`);
         if (acMeta.parts_cost_engines !== undefined) spawnCosts.push(`Engines: ${acMeta.parts_cost_engines}`);
         if (spawnCosts.length > 0) details += `Spawn Parts Cost: ${spawnCosts.join(', ')}\n`;
+        // Display overall range if min/max are present, avoid redundancy if detailed stats are also shown by LLM
         if (acMeta.speed_min_display || acMeta.speed_max_display) {
              details += `Display Speed Range: ${acMeta.speed_min_display || '[TBA]'} - ${acMeta.speed_max_display || '[TBA]'} MPH\n`;
         }
@@ -216,6 +218,7 @@ export default async function handler(req: any, res: any) {
 
     if (isAllPlanesQuery) {
       console.log(`"All planes" query detected. Attempting to fetch summary doc: ${ALL_PLANES_SUMMARY_DOC_ID}`);
+      // (Logic for fetching ALL_PLANES_SUMMARY_DOC_ID remains the same as previous version)
       try {
         const fetchResponse = await pineconeIndex.fetch([ALL_PLANES_SUMMARY_DOC_ID]);
         const summaryRecord = fetchResponse.records ? fetchResponse.records[ALL_PLANES_SUMMARY_DOC_ID] : undefined;
@@ -233,7 +236,9 @@ export default async function handler(req: any, res: any) {
       }
     }
 
+    // Try to identify primary item name from initial matches if not an "all planes" query that found its summary
     if (!isAllPlanesQuery || (isAllPlanesQuery && !finalMatches.some(m => m.id === ALL_PLANES_SUMMARY_DOC_ID))) {
+        // If it's an "all planes" query but summary failed, or it's not an "all planes" query, try to find a specific item.
         const potentialPrimaryMatch = finalMatches.find(match => match.metadata && match.metadata.item_name && match.metadata.entity_type === 'aircraft');
         if (potentialPrimaryMatch && potentialPrimaryMatch.metadata) {
             primaryItemName = potentialPrimaryMatch.metadata.item_name;
@@ -243,7 +248,7 @@ export default async function handler(req: any, res: any) {
 
 
     if (!primaryItemName && question && !isAllPlanesQuery) {
-      const knownItems = ["P-51 Mustang", "MiG-29 Fulcrum", "Spitfire"];
+      const knownItems = ["P-51 Mustang", "MiG-29 Fulcrum", "Spitfire"]; // Ensure "Spitfire" or its variants are here
       for (const item of knownItems) {
         if (lowerCaseQuestion.includes(item.toLowerCase())) {
           primaryItemName = item;
@@ -253,7 +258,7 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    if (primaryItemName) {
+    if (primaryItemName) { // Only fetch specific item details if a primaryItemName is set
       const itemNameSnakeCase = primaryItemName.toLowerCase().replace(/ /g, '_').replace(/-/g, '_').replace(/\./g, '').replace(/\//g, '_');
       const overviewFullTextId = `${itemNameSnakeCase}_overview_full_text`;
       const generalInfoId = `${itemNameSnakeCase}_general_info`;
@@ -276,6 +281,7 @@ export default async function handler(req: any, res: any) {
         idsToFetchIfNeeded.push(statHealthId);
         console.log(`Query requests health for ${primaryItemName}. Adding ${statHealthId} to fetch list.`);
       }
+      // If the query is very generic for an item, e.g., "tell me about spitfire", also try to get its detailed stats
       if (!requestsSpeed && !requestsHealth && (lowerCaseQuestion.includes(`about ${primaryItemName.toLowerCase()}`) || lowerCaseQuestion.includes(`stats for ${primaryItemName.toLowerCase()}`))) {
           if (!finalMatches.some(match => match.id === statSpeedId)) idsToFetchIfNeeded.push(statSpeedId);
           if (!finalMatches.some(match => match.id === statHealthId)) idsToFetchIfNeeded.push(statHealthId);
@@ -323,12 +329,8 @@ export default async function handler(req: any, res: any) {
 - For individual items, if the user is seeking an overview (e.g., "tell me about the p-51 plane"), utilize 'overview_full_text' primarily, and supplement with 'general_info' and any available detailed stat chunks (like 'stat_speed', 'stat_health'). Include price/unlock, key stats (overall range AND tiered stats like non-upgraded, Tier 1, Tier 2, Tier 3 if available), armaments, utilities, seating capacity, component counts, spawn parts costs, and strengths/weaknesses if available.
 - If detailed tiered stats (non-upgraded, Tier 1, etc.) for speed or health are present in the context, prioritize showing them. The 'Display Speed Range' and 'Display Health Range' from 'general_info' provide an overall summary.
 - "parts_cost_hulls", "parts_cost_weapon_systems", and "parts_cost_engines" are spawn/respawn costs.
-- If asked for stats, provide all available stats from the context.
-- When presenting detailed statistics for an item, or when comparing multiple items, organize the information clearly.
-- If multiple attributes (e.g., Price, Speed, Health, Armaments, Unlock Method, Seating Capacity, Tiered Stats) are being presented for one or more items, format this information as a Markdown table where appropriate for clarity and organization.
-- For example, if providing a full stat sheet for a plane, a table is preferred. If comparing planes, use a table with planes as rows and stats as columns.
-- For tiered stats (Non-Upgraded, Tier 1, Tier 2, Tier 3), list them clearly, possibly within a table cell (e.g., "Speed (NU | T1 | T2 | T3)") or as sub-bullet points under the main stat if a table is used, or as separate rows if that provides better clarity (e.g. Speed (Non-Upgraded), Speed (Tier 1), etc.). Choose the clearest representation.
-- If the context does NOT contain the answer (e.g., specific details for an item not listed, or a comprehensive list if no summary document was found/provided, or tiered stats if only a general range is available), you MUST state that the information is not available in your current knowledge base for that specific question. Do not apologize unless it's a system error. If presenting a table and some data points are missing, indicate 'N/A' or 'Not specified' within the table cell for that specific data point.
+- If asked for stats, provide all available stats from the context. For comparisons, include all key details for EACH item if context is provided.
+- If the context does NOT contain the answer (e.g., specific details for an item not listed, or a comprehensive list if no summary document was found/provided, or tiered stats if only a general range is available), you MUST state that the information is not available in your current knowledge base for that specific question. Do not apologize unless it's a system error.
 - Do NOT make up information, use external knowledge, or speculate.
 - Synthesize information if multiple documents cover different aspects.
 - If context is irrelevant, indicate that. If the question is irrational, ask for clarification.`;
@@ -348,7 +350,7 @@ Answer:`;
         { role: 'system', content: system_prompt },
         { role: 'user', content: user_prompt }
       ],
-      max_tokens: 2000, // Increased max_tokens for potentially larger tables
+      max_tokens: 1500,
       temperature: 0.1,
     });
 
