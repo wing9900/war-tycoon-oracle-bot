@@ -43,6 +43,20 @@ const ALL_PLANES_SUMMARY_DOC_ID = "all_aircraft_summary_info";
 // --- Keywords for specific stat requests ---
 const SPEED_STAT_KEYWORDS = ['speed', 'fast', 'mph', 'kph', 'velocity'];
 const HEALTH_STAT_KEYWORDS = ['health', 'hp', 'survivability', 'durability', 'hitpoints', 'hit points', 'armor'];
+const GENERAL_STAT_KEYWORDS = ["stats", "details", "info", "about", "full", "information", "data"];
+
+// --- Known Items and Aliases for better primary item detection ---
+interface KnownItem {
+  name: string;
+  aliases: string[];
+  entityType: string; // e.g., 'aircraft', 'tank'
+}
+const KNOWN_GAME_ITEMS: KnownItem[] = [
+  { name: "P-51 Mustang", aliases: ["p-51", "mustang", "p51"], entityType: 'aircraft' },
+  { name: "MiG-29 Fulcrum", aliases: ["mig-29", "fulcrum", "mig29"], entityType: 'aircraft' },
+  { name: "Spitfire", aliases: ["spitfire", "spit"], entityType: 'aircraft' }
+  // Add more items as needed
+];
 
 
 // --- TypeScript Interfaces for Metadata ---
@@ -51,7 +65,7 @@ interface BaseMetadata {
   item_name?: string;
   info_type?: string;
   text_content_source?: string;
-  planes_summary?: Array<{
+  planes_summary?: Array<{ // For the all_aircraft_summary_info document
     name: string;
     price?: number | string;
     unlock_method?: string;
@@ -60,7 +74,7 @@ interface BaseMetadata {
     speed_range?: string;
     health_range?: string;
   }>;
-  // Fields for stat_speed, stat_health etc. (can be caught by [key: string]: any)
+  // Common fields for stat documents (stat_speed, stat_health, etc.)
   unit?: string;
   display_speed_non_upgraded?: string; speed_nu_val?: number | string;
   display_speed_tier_1?: string; speed_t1_val?: number | string;
@@ -70,7 +84,7 @@ interface BaseMetadata {
   display_health_tier_1?: string; health_t1_val?: number | string;
   display_health_tier_2?: string; health_t2_val?: number | string;
   display_health_tier_3?: string; health_t3_val?: number | string;
-  [key: string]: any;
+  [key: string]: any; // Allows other fields not explicitly defined
 }
 
 interface AircraftGeneralInfoMetadata extends BaseMetadata {
@@ -105,11 +119,11 @@ function formatRetrievedContext(matches: ScoredPineconeRecord<BaseMetadata>[]): 
     const textSource = metadata.text_content_source || "No source text available for this chunk.";
 
     let details = `Item Name: ${metadata.item_name || "Unknown Item"}\nEntity Type: ${metadata.entity_type || "Unknown"}\nInfo Type: ${metadata.info_type || "General"}\n`;
-    const acMeta = metadata as any; // Using 'any' for flexibility, maps to relevant metadata fields
+    const acMeta = metadata as any; // Using 'any' for flexibility with diverse metadata structures
 
     if (id === ALL_PLANES_SUMMARY_DOC_ID && acMeta.planes_summary && Array.isArray(acMeta.planes_summary)) {
       details += "Summary of All Aircraft:\n";
-      acMeta.planes_summary.forEach((plane: any) => { // Explicitly type plane as any or a defined interface
+      acMeta.planes_summary.forEach((plane: any) => {
         details += `  - Name: ${plane.name || 'N/A'}\n`;
         if (plane.price) details += `    Price/Unlock: ${plane.price}${plane.unlock_method ? ` (${plane.unlock_method})` : ''}\n`;
         if (plane.seating_capacity) details += `    Seating: ${plane.seating_capacity}\n`;
@@ -149,7 +163,6 @@ function formatRetrievedContext(matches: ScoredPineconeRecord<BaseMetadata>[]): 
         if (acMeta.parts_cost_weapon_systems !== undefined) spawnCosts.push(`Weapon Systems: ${acMeta.parts_cost_weapon_systems}`);
         if (acMeta.parts_cost_engines !== undefined) spawnCosts.push(`Engines: ${acMeta.parts_cost_engines}`);
         if (spawnCosts.length > 0) details += `Spawn Parts Cost: ${spawnCosts.join(', ')}\n`;
-        // Display overall range if min/max are present, avoid redundancy if detailed stats are also shown by LLM
         if (acMeta.speed_min_display || acMeta.speed_max_display) {
              details += `Display Speed Range: ${acMeta.speed_min_display || '[TBA]'} - ${acMeta.speed_max_display || '[TBA]'} MPH\n`;
         }
@@ -158,20 +171,38 @@ function formatRetrievedContext(matches: ScoredPineconeRecord<BaseMetadata>[]): 
         }
       } else if (acMeta.info_type === 'stat_speed') {
         details += `Detailed Speed Stats (Unit: ${acMeta.unit || "N/A"}):\n`;
-        details += `  Non-Upgraded: ${acMeta.display_speed_non_upgraded || "[TBA]"} (Value: ${acMeta.speed_nu_val ?? "[TBA]"})\n`;
-        details += `  Tier 1: ${acMeta.display_speed_tier_1 || "[TBA]"} (Value: ${acMeta.speed_t1_val ?? "[TBA]"})\n`;
-        details += `  Tier 2: ${acMeta.display_speed_tier_2 || "[TBA]"} (Value: ${acMeta.speed_t2_val ?? "[TBA]"})\n`;
-        details += `  Tier 3: ${acMeta.display_speed_tier_3 || "[TBA]"} (Value: ${acMeta.speed_t3_val ?? "[TBA]"})\n`;
+        if (acMeta.display_speed_non_upgraded !== undefined) details += `  Non-Upgraded: ${acMeta.display_speed_non_upgraded} (Value: ${acMeta.speed_nu_val ?? "[TBA]"})\n`;
+        if (acMeta.display_speed_tier_1 !== undefined) details += `  Tier 1: ${acMeta.display_speed_tier_1} (Value: ${acMeta.speed_t1_val ?? "[TBA]"})\n`;
+        if (acMeta.display_speed_tier_2 !== undefined) details += `  Tier 2: ${acMeta.display_speed_tier_2} (Value: ${acMeta.speed_t2_val ?? "[TBA]"})\n`;
+        if (acMeta.display_speed_tier_3 !== undefined) details += `  Tier 3: ${acMeta.display_speed_tier_3} (Value: ${acMeta.speed_t3_val ?? "[TBA]"})\n`;
       } else if (acMeta.info_type === 'stat_health') {
         details += `Detailed Health Stats (Unit: ${acMeta.unit || "N/A"}):\n`;
-        details += `  Non-Upgraded: ${acMeta.display_health_non_upgraded || "[TBA]"} (Value: ${acMeta.health_nu_val ?? "[TBA]"})\n`;
-        details += `  Tier 1: ${acMeta.display_health_tier_1 || "[TBA]"} (Value: ${acMeta.health_t1_val ?? "[TBA]"})\n`;
-        details += `  Tier 2: ${acMeta.display_health_tier_2 || "[TBA]"} (Value: ${acMeta.health_t2_val ?? "[TBA]"})\n`;
-        details += `  Tier 3: ${acMeta.display_health_tier_3 || "[TBA]"} (Value: ${acMeta.health_t3_val ?? "[TBA]"})\n`;
+        if (acMeta.display_health_non_upgraded !== undefined) details += `  Non-Upgraded: ${acMeta.display_health_non_upgraded} (Value: ${acMeta.health_nu_val ?? "[TBA]"})\n`;
+        if (acMeta.display_health_tier_1 !== undefined) details += `  Tier 1: ${acMeta.display_health_tier_1} (Value: ${acMeta.health_t1_val ?? "[TBA]"})\n`;
+        if (acMeta.display_health_tier_2 !== undefined) details += `  Tier 2: ${acMeta.display_health_tier_2} (Value: ${acMeta.health_t2_val ?? "[TBA]"})\n`;
+        if (acMeta.display_health_tier_3 !== undefined) details += `  Tier 3: ${acMeta.display_health_tier_3} (Value: ${acMeta.health_t3_val ?? "[TBA]"})\n`;
       }
-      // ... other aircraft info_type handlers ...
+      // ... other aircraft info_type handlers (armament_description, history, overview_concise, category_membership) ...
+       else if (acMeta.info_type === 'armament_description') {
+          details += `Described Weapon: ${acMeta.weapon_name || "N/A"} (Count: ${acMeta.count ?? "N/A"}, Type: ${acMeta.weapon_type_general || "N/A"})\n`;
+          if (acMeta.characteristics && acMeta.characteristics.length > 0) {
+              details += `  Characteristics: ${acMeta.characteristics.join(', ')}\n`;
+          }
+          details += `  Notes: ${acMeta.notes || "N/A"}\n`;
+      } else if (acMeta.info_type === 'history') {
+          details += `Section: ${acMeta.section_title || "History"}\n`;
+          if (acMeta.key_periods && acMeta.key_periods.length > 0) {
+              details += `  Key Periods: ${acMeta.key_periods.join(', ')}\n`;
+          }
+      } else if (acMeta.info_type === 'overview_concise') {
+          details += `Role: ${acMeta.role || "N/A"}\n`;
+          if (acMeta.strengths && acMeta.strengths.length > 0) details += `  Strengths: ${acMeta.strengths.join('; ')}\n`;
+          if (acMeta.weaknesses && acMeta.weaknesses.length > 0) details += `  Weaknesses: ${acMeta.weaknesses.join('; ')}\n`;
+          if (acMeta.utility_summary_for_concise && acMeta.utility_summary_for_concise.length > 0) details += `  Utilities: ${acMeta.utility_summary_for_concise.join(', ')}\n`;
+      } else if (acMeta.info_type === 'category_membership') {
+          details += `Category: ${acMeta.aircraft_category || "N/A"}\n`;
+      }
     }
-
 
     return `--- Context Chunk ${index + 1} (ID: ${id}, Score: ${score}) ---\n${details.trim()}\nFull Text Context:\n${textSource}\n---`;
   }).join('\n\n');
@@ -207,18 +238,19 @@ export default async function handler(req: any, res: any) {
     console.log('Querying Pinecone with topK=5 for initial semantic matches...');
     const initialPineconeResponse = await pineconeIndex.query({
       vector: embedding,
-      topK: 5,
+      topK: 5, // Consider adjusting based on typical query complexity
       includeMetadata: true,
     });
-    console.log('Initial Pinecone query successful.');
+    console.log('Initial Pinecone query successful. Matches found:', initialPineconeResponse.matches?.length || 0);
 
     let finalMatches: ScoredPineconeRecord<BaseMetadata>[] = initialPineconeResponse.matches || [];
     let primaryItemName: string | undefined;
-    let isAllPlanesQuery = ALL_PLANES_KEYWORDS.some(keyword => lowerCaseQuestion.includes(keyword));
+    let primaryItemEntityType: string | undefined;
+
+    const isAllPlanesQuery = ALL_PLANES_KEYWORDS.some(keyword => lowerCaseQuestion.includes(keyword));
 
     if (isAllPlanesQuery) {
       console.log(`"All planes" query detected. Attempting to fetch summary doc: ${ALL_PLANES_SUMMARY_DOC_ID}`);
-      // (Logic for fetching ALL_PLANES_SUMMARY_DOC_ID remains the same as previous version)
       try {
         const fetchResponse = await pineconeIndex.fetch([ALL_PLANES_SUMMARY_DOC_ID]);
         const summaryRecord = fetchResponse.records ? fetchResponse.records[ALL_PLANES_SUMMARY_DOC_ID] : undefined;
@@ -226,7 +258,7 @@ export default async function handler(req: any, res: any) {
           const summaryMatch: ScoredPineconeRecord<BaseMetadata> = {
             id: summaryRecord.id, score: 1.0, metadata: (summaryRecord.metadata as BaseMetadata),
           };
-          finalMatches.unshift(summaryMatch);
+          finalMatches.unshift(summaryMatch); // Prioritize this summary
           console.log(`Successfully fetched and prepended ${ALL_PLANES_SUMMARY_DOC_ID}.`);
         } else {
           console.log(`Could not fetch or find metadata for summary record ${ALL_PLANES_SUMMARY_DOC_ID}.`);
@@ -236,30 +268,52 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    // Try to identify primary item name from initial matches if not an "all planes" query that found its summary
+    // Attempt to identify primary item from semantic matches if not an "all planes" query (or if its summary failed)
     if (!isAllPlanesQuery || (isAllPlanesQuery && !finalMatches.some(m => m.id === ALL_PLANES_SUMMARY_DOC_ID))) {
-        // If it's an "all planes" query but summary failed, or it's not an "all planes" query, try to find a specific item.
-        const potentialPrimaryMatch = finalMatches.find(match => match.metadata && match.metadata.item_name && match.metadata.entity_type === 'aircraft');
-        if (potentialPrimaryMatch && potentialPrimaryMatch.metadata) {
-            primaryItemName = potentialPrimaryMatch.metadata.item_name;
-            console.log(`Primary item identified from semantic matches: ${primaryItemName}`);
+        for (const match of finalMatches) {
+            if (match.metadata?.item_name && match.metadata?.entity_type) { // Ensure item_name and entity_type exist
+                // Check if any known item name or alias is in the query, and if it matches the item_name from metadata
+                const foundKnownItem = KNOWN_GAME_ITEMS.find(knownItem => {
+                    const itemNameInQuery = lowerCaseQuestion.includes(knownItem.name.toLowerCase()) ||
+                                          knownItem.aliases.some(alias => lowerCaseQuestion.includes(alias.toLowerCase()));
+                    return itemNameInQuery && knownItem.name.toLowerCase() === match.metadata.item_name.toLowerCase();
+                });
+
+                if (foundKnownItem) {
+                    primaryItemName = foundKnownItem.name; // Use canonical name
+                    primaryItemEntityType = foundKnownItem.entityType;
+                    console.log(`Primary item "${primaryItemName}" (Type: ${primaryItemEntityType}) identified from semantic match and question keywords.`);
+                    break; // Found a good candidate
+                }
+            }
         }
     }
-
-
-    if (!primaryItemName && question && !isAllPlanesQuery) {
-      const knownItems = ["P-51 Mustang", "MiG-29 Fulcrum", "Spitfire"]; // Ensure "Spitfire" or its variants are here
-      for (const item of knownItems) {
-        if (lowerCaseQuestion.includes(item.toLowerCase())) {
-          primaryItemName = item;
-          console.log(`Primary item identified from question keywords: ${primaryItemName}`);
+    
+    // Fallback: Identify primary item from keywords if not found via semantic matches linked to question content
+    if (!primaryItemName && !isAllPlanesQuery) {
+      for (const item of KNOWN_GAME_ITEMS) {
+        if (lowerCaseQuestion.includes(item.name.toLowerCase())) {
+          primaryItemName = item.name;
+          primaryItemEntityType = item.entityType;
           break;
         }
+        for (const alias of item.aliases) {
+          if (lowerCaseQuestion.includes(alias.toLowerCase())) {
+            primaryItemName = item.name; // Use canonical name
+            primaryItemEntityType = item.entityType;
+            break;
+          }
+        }
+        if (primaryItemName) break;
+      }
+      if (primaryItemName) {
+        console.log(`Primary item "${primaryItemName}" (Type: ${primaryItemEntityType}) identified purely from question keywords/aliases.`);
       }
     }
 
-    if (primaryItemName) { // Only fetch specific item details if a primaryItemName is set
-      const itemNameSnakeCase = primaryItemName.toLowerCase().replace(/ /g, '_').replace(/-/g, '_').replace(/\./g, '').replace(/\//g, '_');
+
+    if (primaryItemName && primaryItemEntityType === 'aircraft') {
+      const itemNameSnakeCase = primaryItemName.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/_{2,}/g, '_'); // More robust snake_case
       const overviewFullTextId = `${itemNameSnakeCase}_overview_full_text`;
       const generalInfoId = `${itemNameSnakeCase}_general_info`;
       const statSpeedId = `${itemNameSnakeCase}_stat_speed`;
@@ -270,27 +324,29 @@ export default async function handler(req: any, res: any) {
       if (!finalMatches.some(match => match.id === overviewFullTextId)) idsToFetchIfNeeded.push(overviewFullTextId);
       if (!finalMatches.some(match => match.id === generalInfoId)) idsToFetchIfNeeded.push(generalInfoId);
 
-      const requestsSpeed = SPEED_STAT_KEYWORDS.some(kw => lowerCaseQuestion.includes(kw));
-      const requestsHealth = HEALTH_STAT_KEYWORDS.some(kw => lowerCaseQuestion.includes(kw));
+      const requestsSpecificSpeed = SPEED_STAT_KEYWORDS.some(kw => lowerCaseQuestion.includes(kw));
+      const requestsSpecificHealth = HEALTH_STAT_KEYWORDS.some(kw => lowerCaseQuestion.includes(kw));
+      const requestsGeneralItemStats = GENERAL_STAT_KEYWORDS.some(kw => lowerCaseQuestion.includes(kw)) && 
+                                       (lowerCaseQuestion.includes(primaryItemName.toLowerCase()) || KNOWN_GAME_ITEMS.find(i=>i.name === primaryItemName)?.aliases.some(a => lowerCaseQuestion.includes(a)));
+      
+      console.log(`For ${primaryItemName}: requestsSpecificSpeed=${requestsSpecificSpeed}, requestsSpecificHealth=${requestsSpecificHealth}, requestsGeneralItemStats=${requestsGeneralItemStats}`);
 
-      if (requestsSpeed && !finalMatches.some(match => match.id === statSpeedId)) {
-        idsToFetchIfNeeded.push(statSpeedId);
-        console.log(`Query requests speed for ${primaryItemName}. Adding ${statSpeedId} to fetch list.`);
+      // Fetch detailed stats if specifically asked, or if it's a general stat request for the item
+      if (requestsSpecificSpeed || requestsGeneralItemStats) {
+        if (!finalMatches.some(match => match.id === statSpeedId)) {
+          idsToFetchIfNeeded.push(statSpeedId);
+          console.log(`Adding ${statSpeedId} to fetch list for ${primaryItemName}.`);
+        }
       }
-      if (requestsHealth && !finalMatches.some(match => match.id === statHealthId)) {
-        idsToFetchIfNeeded.push(statHealthId);
-        console.log(`Query requests health for ${primaryItemName}. Adding ${statHealthId} to fetch list.`);
+      if (requestsSpecificHealth || requestsGeneralItemStats) {
+        if (!finalMatches.some(match => match.id === statHealthId)) {
+          idsToFetchIfNeeded.push(statHealthId);
+          console.log(`Adding ${statHealthId} to fetch list for ${primaryItemName}.`);
+        }
       }
-      // If the query is very generic for an item, e.g., "tell me about spitfire", also try to get its detailed stats
-      if (!requestsSpeed && !requestsHealth && (lowerCaseQuestion.includes(`about ${primaryItemName.toLowerCase()}`) || lowerCaseQuestion.includes(`stats for ${primaryItemName.toLowerCase()}`))) {
-          if (!finalMatches.some(match => match.id === statSpeedId)) idsToFetchIfNeeded.push(statSpeedId);
-          if (!finalMatches.some(match => match.id === statHealthId)) idsToFetchIfNeeded.push(statHealthId);
-          console.log(`General query for ${primaryItemName}. Adding detailed stat docs to fetch list.`);
-      }
-
 
       if (idsToFetchIfNeeded.length > 0) {
-        console.log(`Attempting to fetch essential/detailed chunks for ${primaryItemName}: ${idsToFetchIfNeeded.join(', ')}...`);
+        console.log(`Attempting to fetch specific docs for ${primaryItemName}: ${idsToFetchIfNeeded.join(', ')}...`);
         try {
           const fetchResponse = await pineconeIndex.fetch(idsToFetchIfNeeded);
           if (fetchResponse.records) {
@@ -298,24 +354,26 @@ export default async function handler(req: any, res: any) {
               const record = fetchResponse.records[idToFetch];
               if (record && record.metadata) {
                 const fetchedMatch: ScoredPineconeRecord<BaseMetadata> = {
-                  id: record.id, score: 0.98, metadata: (record.metadata as BaseMetadata),
+                  id: record.id, score: 0.99, // High score for directly fetched supporting docs
+                  metadata: (record.metadata as BaseMetadata),
                 };
                 finalMatches.push(fetchedMatch);
-                console.log(`Successfully fetched and added ${idToFetch} to context.`);
+                console.log(`Successfully fetched and added ${idToFetch} to context for ${primaryItemName}.`);
               } else {
-                console.log(`Could not fetch or find metadata for record ${idToFetch}.`);
+                console.log(`Could not fetch or find metadata for specific record ${idToFetch} for ${primaryItemName}.`);
               }
             }
           }
         } catch (fetchError: any) {
-          console.error(`Error fetching essential/detailed chunks for ${primaryItemName}:`, fetchError.message || fetchError);
+          console.error(`Error fetching specific docs for ${primaryItemName}:`, fetchError.message || fetchError);
         }
       }
     }
 
+    // Sort by score and then ensure unique IDs, keeping the one with higher score if duplicated
     finalMatches.sort((a, b) => (b.score || 0) - (a.score || 0));
     const uniqueMatches = Array.from(new Map(finalMatches.map(match => [match.id, match])).values());
-    const limitedMatches = uniqueMatches.slice(0, 10);
+    const limitedMatches = uniqueMatches.slice(0, 10); // Adjust as needed
 
     const contexts = formatRetrievedContext(limitedMatches);
 
@@ -327,10 +385,14 @@ export default async function handler(req: any, res: any) {
 - Answer the user's "Question" using ONLY this context.
 - If the context contains a summary list of items (e.g., from a document like "all_aircraft_summary_info"), use that information to answer questions about "all items."
 - For individual items, if the user is seeking an overview (e.g., "tell me about the p-51 plane"), utilize 'overview_full_text' primarily, and supplement with 'general_info' and any available detailed stat chunks (like 'stat_speed', 'stat_health'). Include price/unlock, key stats (overall range AND tiered stats like non-upgraded, Tier 1, Tier 2, Tier 3 if available), armaments, utilities, seating capacity, component counts, spawn parts costs, and strengths/weaknesses if available.
-- If detailed tiered stats (non-upgraded, Tier 1, etc.) for speed or health are present in the context, prioritize showing them. The 'Display Speed Range' and 'Display Health Range' from 'general_info' provide an overall summary.
+- If detailed tiered stats (non-upgraded, Tier 1, etc.) for speed or health are present in the context (usually from 'stat_speed' or 'stat_health' info_type), prioritize showing them clearly. The 'Display Speed Range' and 'Display Health Range' from 'general_info' provide an overall summary and can be mentioned as well.
 - "parts_cost_hulls", "parts_cost_weapon_systems", and "parts_cost_engines" are spawn/respawn costs.
-- If asked for stats, provide all available stats from the context. For comparisons, include all key details for EACH item if context is provided.
-- If the context does NOT contain the answer (e.g., specific details for an item not listed, or a comprehensive list if no summary document was found/provided, or tiered stats if only a general range is available), you MUST state that the information is not available in your current knowledge base for that specific question. Do not apologize unless it's a system error.
+- If asked for stats, provide all available stats from the context.
+- When presenting detailed statistics for an item, or when comparing multiple items, organize the information clearly.
+- If multiple attributes (e.g., Price, Speed, Health, Armaments, Unlock Method, Seating Capacity, Tiered Stats) are being presented for one or more items, format this information as a Markdown table where appropriate for clarity and organization.
+- For example, if providing a full stat sheet for a plane, a table is preferred. If comparing planes, use a table with planes as rows and stats as columns.
+- For tiered stats (Non-Upgraded, Tier 1, Tier 2, Tier 3), list them clearly, possibly within a table cell (e.g., "Speed (NU | T1 | T2 | T3)") or as separate rows if that provides better clarity (e.g. Speed (Non-Upgraded), Speed (Tier 1), etc.). Choose the clearest representation.
+- If the context does NOT contain the answer (e.g., specific details for an item not listed, or a comprehensive list if no summary document was found/provided, or tiered stats if only a general range is available), you MUST state that the information is not available in your current knowledge base for that specific question. Do not apologize unless it's a system error. If presenting a table and some data points are missing, indicate 'N/A' or 'Not specified' within the table cell for that specific data point.
 - Do NOT make up information, use external knowledge, or speculate.
 - Synthesize information if multiple documents cover different aspects.
 - If context is irrelevant, indicate that. If the question is irrational, ask for clarification.`;
@@ -350,7 +412,7 @@ Answer:`;
         { role: 'system', content: system_prompt },
         { role: 'user', content: user_prompt }
       ],
-      max_tokens: 1500,
+      max_tokens: 2000,
       temperature: 0.1,
     });
 
